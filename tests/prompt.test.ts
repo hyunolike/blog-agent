@@ -43,6 +43,16 @@ describe("buildSources", () => {
     const { sources } = buildSources([hit(1, 1, big), hit(2, 1, "넘치는 조각")]);
     expect(sources.map((s) => s.postId)).toEqual([1]);
   });
+
+  it("truncates a single source that exceeds the budget", () => {
+    const huge = "가".repeat(PROMPT_BUDGET.sourceChars * 2);
+    const { block, sources } = buildSources([hit(1, 1, huge)]);
+    expect(sources).toHaveLength(1);
+    expect(sources[0]!.postId).toBe(1);
+    expect(block).toContain("…(이하 생략)");
+    const gaCount = (block.match(/가/g) || []).length;
+    expect(gaCount).toBe(PROMPT_BUDGET.sourceChars);
+  });
 });
 
 describe("buildModelMessages", () => {

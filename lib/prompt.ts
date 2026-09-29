@@ -28,7 +28,25 @@ export function buildSources(results: RetrievedChunk[]): { block: string; source
   const parts: string[] = [];
   let used = 0;
   for (const { chunk, post } of results) {
-    if (used + chunk.text.length > PROMPT_BUDGET.sourceChars && sources.length > 0) break;
+    const remaining = PROMPT_BUDGET.sourceChars - used;
+
+    // If adding this chunk would exceed budget
+    if (chunk.text.length > remaining) {
+      // If we already have sources, stop without adding this one
+      if (sources.length > 0) break;
+      // Otherwise, truncate this first source and add it
+      const n = sources.length + 1;
+      const section = chunk.headingPath.join(" > ");
+      const truncatedText = chunk.text.slice(0, remaining) + "\n…(이하 생략)";
+      sources.push({ n, postId: post.id, title: post.title, url: post.url, section });
+      parts.push(
+        `<source id="${n}" title="${escapeAttr(post.title)}" section="${escapeAttr(section)}" url="${post.url}">\n${truncatedText}\n</source>`,
+      );
+      used = PROMPT_BUDGET.sourceChars;
+      break; // Stop after the first truncated source
+    }
+
+    // Normal case: chunk fits in remaining budget
     const n = sources.length + 1;
     const section = chunk.headingPath.join(" > ");
     sources.push({ n, postId: post.id, title: post.title, url: post.url, section });
