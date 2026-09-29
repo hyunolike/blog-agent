@@ -15,8 +15,8 @@ export type AppEnv = z.infer<typeof schema> & { FREE_MODELS: string[]; allowedOr
 
 export function readEnv(env: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = schema.parse(env);
-  const allowedOrigins = [parsed.APP_ORIGIN];
-  if (env.VERCEL_URL) allowedOrigins.push(`https://${env.VERCEL_URL}`);
-  if (env.VERCEL_BRANCH_URL) allowedOrigins.push(`https://${env.VERCEL_BRANCH_URL}`);
+  const allowedOrigins = [new URL(parsed.APP_ORIGIN).origin];
+  if (env.VERCEL_URL) allowedOrigins.push(new URL(`https://${env.VERCEL_URL}`).origin);
+  if (env.VERCEL_BRANCH_URL) allowedOrigins.push(new URL(`https://${env.VERCEL_BRANCH_URL}`).origin);
   return { ...parsed, FREE_MODELS: list(env.FREE_MODELS), allowedOrigins };
 }

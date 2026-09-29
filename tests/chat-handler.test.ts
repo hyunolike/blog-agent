@@ -140,13 +140,16 @@ describe("handleChat", () => {
   });
 
   it("sends sources and an AI_UNAVAILABLE error when every model fails", async () => {
+    const log = vi.fn();
     const res = await handleChat(
       request(ask("점검")),
-      deps({ createModel: (onUsed) => createFallbackModel({ primary: null, fallback: failingModel, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }) }),
+      deps({ createModel: (onUsed) => createFallbackModel({ primary: null, fallback: failingModel, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }), log }),
     );
     const chunks = await sse(res);
     expect(chunks[0].messageMetadata.sources.length).toBeGreaterThan(0);
     expect(chunks.find((c) => c.type === "error")).toMatchObject({ errorText: AI_UNAVAILABLE });
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ event: "chat", outcome: "all_models_failed" }));
+    for (const call of log.mock.calls) expect(JSON.stringify(call[0])).not.toContain("점검");
   });
 
   it("uses the viewed post only when from is a real post url", async () => {

@@ -102,6 +102,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
   const model = deps.createModel((u) => {
     used = u;
   });
+  const postIds = [...new Set(sources.map((s) => s.postId))];
 
   const stream = createUIMessageStream<ChatUIMessage>({
     execute: ({ writer }) => {
@@ -112,6 +113,19 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
         messages: buildModelMessages(messages, block),
         maxOutputTokens: CHAT_LIMITS.maxOutputTokens,
         maxRetries: 0,
+        onError: ({ error }) => {
+          // 모든 모델이 실패하면 스트림은 finish 없이 start→error로 끝난다.
+          // 여기서 직접 구조화 로그를 남기고, ai SDK의 기본 console.error(원시 에러) 출력을 대신한다.
+          deps.log({
+            event: "chat",
+            outcome: "all_models_failed",
+            error: error instanceof Error ? error.message : String(error),
+            totalMs: Date.now() - startedAt,
+            postIds,
+            questionChars,
+            embedFailed,
+          });
+        },
       });
       writer.merge(
         toUIMessageStream<ToolSet, ChatUIMessage>({
@@ -123,13 +137,14 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
             if (part.type !== "finish") return undefined;
             deps.log({
               event: "chat",
+              outcome: "ok",
               model: used?.modelId,
               tier: used?.tier,
               fallbackReason: used?.reason,
               firstTextMs: firstTextAt ? firstTextAt - startedAt : null,
               totalMs: Date.now() - startedAt,
               usage: part.totalUsage,
-              postIds: [...new Set(sources.map((s) => s.postId))],
+              postIds,
               questionChars,
               embedFailed,
             });
