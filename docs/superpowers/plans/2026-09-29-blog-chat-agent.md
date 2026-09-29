@@ -487,7 +487,7 @@ const cellText = (el: Element) =>
 
 function createTurndown(): TurndownService {
   const td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
-  // 결과물은 사람이 아니라 검색과 LLM이 읽는다. "1. 개발 소개"가 "1\\. 개발 소개"로 바뀌지 않게 이스케이프를 끈다
+  // 결과물은 사람이 아니라 검색과 LLM이 읽는다. "1. 개발 소개"가 "1\. 개발 소개"로 바뀌지 않게 이스케이프를 끈다
   td.escape = (text: string) => text;
 
   td.addRule("tistoryCode", {
