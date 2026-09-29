@@ -17,7 +17,7 @@ export function exhaustTtlMs(resetAtMs: number | null, now: number): number {
   let reset = resetAtMs;
   if (reset !== null && reset < 1e12) reset *= 1000;
   const wanted = reset === null ? 60_000 : reset - now;
-  return Math.min(Math.max(wanted, 1000), nextUtcMidnight(now) - now);
+  return Math.ceil(Math.min(Math.max(wanted, 1000), nextUtcMidnight(now) - now));
 }
 
 export function createMemoryFlags(now: () => number = Date.now): FlagStore {

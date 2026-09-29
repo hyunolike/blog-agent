@@ -104,6 +104,34 @@ function resetAtFrom(err: unknown): number | null {
 const describe = (err: unknown) =>
   APICallError.isInstance(err) ? `${err.statusCode ?? "?"} ${err.message}` : err instanceof Error ? err.message : String(err);
 
+function warnFlagError(err: unknown): void {
+  console.warn(JSON.stringify({ event: "fallback_flag_error", error: err instanceof Error ? err.message : String(err) }));
+}
+
+/** skipPrimary가 실패(예: Redis 장애)해도 무료 모델을 시도하도록 false로 취급한다. */
+async function safeSkipPrimary(skipPrimary?: () => Promise<boolean>): Promise<boolean> {
+  if (!skipPrimary) return false;
+  try {
+    return await skipPrimary();
+  } catch (err) {
+    warnFlagError(err);
+    return false;
+  }
+}
+
+/** onPrimaryRateLimited가 실패(예: Redis 장애)해도 유료 전환을 막지 않는다. */
+async function safeOnPrimaryRateLimited(
+  cb: ((resetAtMs: number | null) => Promise<void> | void) | undefined,
+  resetAtMs: number | null,
+): Promise<void> {
+  if (!cb) return;
+  try {
+    await cb(resetAtMs);
+  } catch (err) {
+    warnFlagError(err);
+  }
+}
+
 export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
   const { primary, fallback } = opts;
   return {
@@ -113,13 +141,13 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
     supportedUrls: {},
 
     async doGenerate(options) {
-      if (primary && !(await opts.skipPrimary?.())) {
+      if (primary && !(await safeSkipPrimary(opts.skipPrimary))) {
         try {
           const result = await primary.doGenerate(options);
           opts.onModelUsed?.({ tier: "free", modelId: primary.modelId });
           return result;
         } catch (err) {
-          if (APICallError.isInstance(err) && err.statusCode === 429) await opts.onPrimaryRateLimited?.(resetAtFrom(err));
+          if (APICallError.isInstance(err) && err.statusCode === 429) await safeOnPrimaryRateLimited(opts.onPrimaryRateLimited, resetAtFrom(err));
           const result = await fallback.doGenerate(options);
           opts.onModelUsed?.({ tier: "paid", modelId: fallback.modelId, reason: describe(err) });
           return result;
@@ -132,7 +160,7 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
 
     async doStream(options) {
       let reason = primary ? "free-exhausted" : "no-free-models";
-      if (primary && !(await opts.skipPrimary?.())) {
+      if (primary && !(await safeSkipPrimary(opts.skipPrimary))) {
         try {
           const { result, modelId } = await streamWithFirstToken(primary, options, opts.firstTokenTimeoutMs);
           opts.onModelUsed?.({ tier: "free", modelId });
@@ -140,7 +168,7 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
         } catch (err) {
           if (options.abortSignal?.aborted) throw err;
           reason = describe(err);
-          if (APICallError.isInstance(err) && err.statusCode === 429) await opts.onPrimaryRateLimited?.(resetAtFrom(err));
+          if (APICallError.isInstance(err) && err.statusCode === 429) await safeOnPrimaryRateLimited(opts.onPrimaryRateLimited, resetAtFrom(err));
         }
       }
       const result = await fallback.doStream(options);

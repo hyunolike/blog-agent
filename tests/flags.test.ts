@@ -21,6 +21,11 @@ describe("exhaustTtlMs", () => {
     expect(exhaustTtlMs(NOW + 48 * 3600_000, NOW)).toBe(NEXT_UTC_MIDNIGHT - NOW);
     expect(exhaustTtlMs(NOW - 5000, NOW)).toBe(1000);
   });
+
+  it("always returns an integer, even for a fractional reset time", () => {
+    expect(Number.isInteger(exhaustTtlMs(NOW + 1234.5, NOW))).toBe(true);
+    expect(Number.isInteger(exhaustTtlMs((NOW + 30_500) / 1000 + 0.0001, NOW))).toBe(true);
+  });
 });
 
 describe("createMemoryFlags", () => {

@@ -132,4 +132,34 @@ describe("createFallbackModel", () => {
     expect((await run(model)).text).toBe("유료 답");
     expect(freeSpy).not.toHaveBeenCalled();
   });
+
+  it("still tries the free model when skipPrimary itself fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const model = createFallbackModel({
+      primary: streamingModel("free", textParts("무료 답")),
+      fallback: streamingModel("paid", textParts("유료 답")),
+      firstTokenTimeoutMs: 1000,
+      skipPrimary: async () => {
+        throw new Error("redis down");
+      },
+    });
+    expect((await run(model)).text).toBe("무료 답");
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
+
+  it("still falls back to paid when onPrimaryRateLimited itself fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const model = createFallbackModel({
+      primary: rateLimited("1790000000000"),
+      fallback: streamingModel("paid", textParts("유료 답")),
+      firstTokenTimeoutMs: 1000,
+      onPrimaryRateLimited: async () => {
+        throw new Error("redis down");
+      },
+    });
+    expect((await run(model)).text).toBe("유료 답");
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
 });
