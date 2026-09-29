@@ -3,6 +3,7 @@ import type { Post } from "@/lib/types";
 
 export type SitemapEntry = { id: number; url: string; lastmod: string };
 
+// sitemap은 글마다 PC(/{id})와 모바일(/m/{id}) URL을 모두 싣는다. PC URL만 써서 중복을 막는다
 const POST_URL = new RegExp(`^${BLOG_ORIGIN.replace(/\./g, "\\.")}/(\\d+)$`);
 
 export function parseSitemap(xml: string): SitemapEntry[] {

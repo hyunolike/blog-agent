@@ -15,7 +15,7 @@ const post = (id: number, modifiedAt: string): Post => ({
 });
 
 describe("parseSitemap", () => {
-  it("keeps only numbered post urls, sorted by id", () => {
+  it("keeps only desktop post urls (mobile duplicates ignored), sorted by id", () => {
     const entries = parseSitemap(readFileSync("tests/fixtures/sitemap.xml", "utf8"));
     expect(entries).toEqual([
       { id: 9, url: "https://hyunolike.tistory.com/9", lastmod: "2025-10-01T09:00:00+09:00" },
