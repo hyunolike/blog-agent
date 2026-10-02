@@ -28,7 +28,8 @@ describe("chunkPost", () => {
   });
 
   it("tracks the heading path per section", () => {
-    const chunks = chunkPost(make("## A\n\n가나다\n\n### B\n\n라마바\n\n## C\n\n사아자"));
+    const long = (ch: string) => para(ch, CHUNK_LIMITS.minSection);
+    const chunks = chunkPost(make(`## A\n\n${long("가")}\n\n### B\n\n${long("라")}\n\n## C\n\n${long("사")}`));
     const body = chunks.filter((c) => c.kind === "body");
     expect(body.map((c) => c.headingPath)).toEqual([["A"], ["A", "B"], ["C"]]);
     expect(body[1]!.embedText.startsWith("테스트 글 > A > B\n")).toBe(true);
@@ -60,5 +61,61 @@ describe("chunkPost", () => {
     expect(chunks.length).toBeGreaterThan(3);
     expect(new Set(chunks.map((c) => c.id)).size).toBe(chunks.length);
     expect(chunks.every((c) => c.text.trim().length > 0)).toBe(true);
+  });
+
+  it("merges short sections into the following sibling or child sections under the shared parent path", () => {
+    const md = "## A\n\n" + para("가", 50) + "\n\n### B\n\n" + para("나", 50) + "\n\n### C\n\n" + para("다", 400);
+    const body = chunkPost(make(md)).filter((c) => c.kind === "body");
+    expect(CHUNK_LIMITS.minSection).toBe(300);
+    expect(body.length).toBeLessThan(3);
+    expect(body.filter((c) => c.text.length < CHUNK_LIMITS.minSection)).toEqual([]);
+    expect(body).toHaveLength(1);
+    expect(body[0]!.headingPath).toEqual(["A"]);
+    expect(body[0]!.text).toBe([para("가", 50), "### B", para("나", 50), "### C", para("다", 400)].join("\n\n"));
+  });
+
+  it("merges a short section only with its next sibling when that is all it can reach", () => {
+    const md = "## A\n\n" + para("가", 400) + "\n\n### B\n\n" + para("나", 50) + "\n\n### C\n\n" + para("다", 400);
+    const body = chunkPost(make(md)).filter((c) => c.kind === "body");
+    expect(body.map((c) => c.headingPath)).toEqual([["A"], ["A"]]);
+    expect(body[1]!.text).toBe(["### B", para("나", 50), "### C", para("다", 400)].join("\n\n"));
+  });
+
+  it("merges a trailing short section into the previous sibling when there is no next one", () => {
+    const md = "## A\n\n### B\n\n" + para("나", 400) + "\n\n### C\n\n" + para("다", 50);
+    const body = chunkPost(make(md)).filter((c) => c.kind === "body");
+    expect(body).toHaveLength(1);
+    expect(body[0]!.headingPath).toEqual(["A"]);
+    expect(body[0]!.text).toContain("나나나");
+    expect(body[0]!.text).toContain("다다다");
+  });
+
+  it("does not merge when the result would exceed the max size", () => {
+    const md = "## A\n\n### B\n\n" + para("나", 100) + "\n\n### C\n\n" + para("다", CHUNK_LIMITS.max);
+    const body = chunkPost(make(md)).filter((c) => c.kind === "body");
+    expect(body.map((c) => c.headingPath)).toEqual([["A", "B"], ["A", "C"]]);
+  });
+
+  it("keeps real post 70 chunks reasonably sized", () => {
+    const post = extractPost(readFileSync("tests/fixtures/posts/70.html", "utf8"), "https://hyunolike.tistory.com/70");
+    const lengths = chunkPost(post).filter((c) => c.kind === "body").map((c) => c.text.length).sort((a, b) => a - b);
+    expect(lengths[0]).toBeGreaterThanOrEqual(120);
+    expect(lengths[Math.floor(lengths.length / 2)]).toBeGreaterThan(400);
+  });
+
+  it("never takes overlap from code, so no chunk has an unbalanced fence", () => {
+    const code = Array.from({ length: 30 }, (_, i) => `line_${i} = ${"x".repeat(20)}`).join("\n");
+    const md = `## 절\n\n${para("가", 300)}\n\n\`\`\`ts\n${code}\n\`\`\`\n\n${para("나", 50)}\n\n${para("다", 1100)}`;
+    const body = chunkPost(make(md)).filter((c) => c.kind === "body");
+    expect(body.length).toBeGreaterThan(1);
+    for (const c of body) expect((c.text.match(/^```/gm) ?? []).length % 2).toBe(0);
+  });
+
+  it("splits a single paragraph longer than the max", () => {
+    const sentences = Array.from({ length: 60 }, (_, i) => `문장 ${i}번은 충분히 길게 써서 나눠야 한다.`).join(" ");
+    const body = chunkPost(make(`## 긴 문단\n\n${sentences}`)).filter((c) => c.kind === "body");
+    expect(sentences.length).toBeGreaterThan(CHUNK_LIMITS.max);
+    expect(body.length).toBeGreaterThan(1);
+    for (const c of body) expect(c.text.length).toBeLessThanOrEqual(CHUNK_LIMITS.max + CHUNK_LIMITS.overlap + 2);
   });
 });
