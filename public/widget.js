@@ -82,7 +82,9 @@
     if (e.key === "Escape" && !panel.hidden) close();
   });
 
+  // 모바일에서는 패널이 화면 전체를 덮으므로, 출처 링크로 이동한 뒤 다시 열면 읽으려던 글을 가린다
+  var isMobile = window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
   try {
-    if (sessionStorage.getItem(OPEN_KEY) === "1") open();
+    if (!isMobile && sessionStorage.getItem(OPEN_KEY) === "1") open();
   } catch (e) {}
 })();
