@@ -28,6 +28,7 @@ npm test
 2. **Upstash:** Redis 데이터베이스(무료)를 만들고 REST URL과 토큰을 복사합니다.
 3. **Vercel:** 이 저장소를 import 하고 환경변수를 넣습니다.
    - `OPENROUTER_API_KEY`, `FREE_MODELS`, `PAID_MODEL`, `EMBEDDING_MODEL`
+   - Vercel의 `EMBEDDING_MODEL`은 인덱스를 읽지 못했을 때만 쓰는 대비값입니다. 채팅은 `data/index.json`에 기록된 임베딩 모델로 질문을 임베딩하고, 두 값이 다르면 로그에 `embedding_model_mismatch`를 남깁니다.
    - `APP_ORIGIN` = 배포 주소(예: `https://blog-agent.vercel.app`)
    - `FRAME_ANCESTORS` = `https://hyunolike.tistory.com`
    - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
@@ -52,6 +53,9 @@ npm test
 - [ ] `ingest` workflow 수동 실행 → `data/index.json` 커밋 → 재배포 확인
 - [ ] 티스토리 PC와 모바일에서 열기, 닫기, 출처 링크 이동 확인
 - [ ] 같은 IP로 11번 연속 질문해 요청 제한 안내 문구 확인
+- [ ] OpenRouter 설정 → Privacy에서 무료 모델(데이터 정책) 사용이 허용돼 있는지 확인 (꺼져 있으면 무료 호출이 전부 유료로 넘어감)
+- [ ] 저장소 기본 브랜치가 Vercel 프로덕션 브랜치와 같은지 확인 (매일 수집 커밋이 기본 브랜치로 들어감)
+- [ ] FRAME_ANCESTORS를 바꾸면 재배포 필요 (빌드 시점에 읽음)
 
 ## 운영
 
