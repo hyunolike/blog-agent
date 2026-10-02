@@ -1,6 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { handleChat, type ChatDeps } from "@/lib/chat-handler";
-import { readEnv } from "@/lib/env";
+import { pickEmbeddingModel, readEnv } from "@/lib/env";
 import { createMemoryFlags, createRedisFlags } from "@/lib/flags";
 import { loadIndex } from "@/lib/index-store";
 import { createMemoryLimiters, createUpstashLimiters } from "@/lib/limits";
@@ -19,9 +19,12 @@ function getDeps(): ChatDeps {
       ? new Redis({ url: env.UPSTASH_REDIS_REST_URL, token: env.UPSTASH_REDIS_REST_TOKEN })
       : null;
   if (!redis) console.warn("[chat] UPSTASH 설정이 없어 메모리 요청 제한을 씁니다. 운영에서는 반드시 설정하세요.");
-  const llm = createLlm(env, redis ? createRedisFlags(redis) : createMemoryFlags());
+  const loaded = loadIndex();
+  const embedding = pickEmbeddingModel(loaded?.index.embeddingModel, env.EMBEDDING_MODEL);
+  if (embedding.mismatch) console.warn(JSON.stringify({ event: "embedding_model_mismatch", ...embedding.mismatch }));
+  const llm = createLlm(env, redis ? createRedisFlags(redis) : createMemoryFlags(), embedding.model);
   deps = {
-    searcher: loadIndex()?.searcher ?? null,
+    searcher: loaded?.searcher ?? null,
     embedQuery: llm.embedQuery,
     createModel: llm.createModel,
     limits: redis ? createUpstashLimiters(redis) : createMemoryLimiters(),
