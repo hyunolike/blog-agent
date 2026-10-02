@@ -1,9 +1,11 @@
 (function () {
   if (window.__blogAgentLoaded) return;
-  window.__blogAgentLoaded = true;
 
-  var script = document.currentScript;
+  var script = document.currentScript || document.querySelector('script[src*="/widget.js"]');
+  if (!script || !script.src) return;
   var ORIGIN = new URL(script.src).origin;
+
+  window.__blogAgentLoaded = true;
   var OPEN_KEY = "blog-agent:open";
 
   var css =
