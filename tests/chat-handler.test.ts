@@ -158,4 +158,46 @@ describe("handleChat", () => {
     await handleChat(request(ask("요약해줘", { from: "javascript:alert(1)" })), deps({ searcher: { search } }));
     expect(search.mock.calls.map((c) => c[0].currentPostId)).toEqual([70, null]);
   });
+
+  it("tells the model which post is being viewed, as source 1", async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      modelId: "paid/model",
+      doStream: async (options) => {
+        prompts.push(JSON.stringify(options.prompt));
+        return okModel("답").doStream(options);
+      },
+    });
+    const res = await handleChat(
+      request(ask("이 글 3줄 요약해줘", { from: "https://hyunolike.tistory.com/70" })),
+      deps({ createModel: (onUsed) => createFallbackModel({ primary: null, fallback: model, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }) }),
+    );
+    const chunks = await sse(res);
+    expect(chunks[0].messageMetadata.sources[0]).toMatchObject({ n: 1, postId: 70 });
+    expect(prompts[0]).toContain("사용자가 지금 보고 있는 글: [1] 점검 페이지");
+  });
+
+  it("logs an interrupted outcome when the model fails after streaming some text", async () => {
+    const log = vi.fn();
+    const breaking = new MockLanguageModelV4({
+      modelId: "paid/model",
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "stream-start", warnings: [] },
+            { type: "text-start", id: "t" },
+            { type: "text-delta", id: "t", delta: "중간까지" },
+            { type: "error", error: new Error("connection reset") },
+          ],
+        }),
+      }),
+    });
+    const res = await handleChat(
+      request(ask("점검")),
+      deps({ createModel: (onUsed) => createFallbackModel({ primary: null, fallback: breaking, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }), log }),
+    );
+    await sse(res);
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ event: "chat", outcome: "interrupted" }));
+    expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: "all_models_failed" }));
+  });
 });

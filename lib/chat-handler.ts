@@ -96,6 +96,8 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
   const currentPostId = parseBlogPostId(parsed.from);
   const results = deps.searcher.search({ query, queryVector, currentPostId });
   const { block, sources } = buildSources(results);
+  // 보고 있는 글이 있으면 검색이 그 글 요약을 맨 앞에 두므로 출처 1번이 된다
+  const currentTitle = currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
 
   let used: ModelUsed | undefined;
   let firstTextAt: number | undefined;
@@ -110,15 +112,16 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
       const result = streamText({
         model,
         instructions: SYSTEM_PROMPT,
-        messages: buildModelMessages(messages, block),
+        messages: buildModelMessages(messages, block, currentTitle),
         maxOutputTokens: CHAT_LIMITS.maxOutputTokens,
         maxRetries: 0,
+        abortSignal: req.signal,
         onError: ({ error }) => {
-          // 모든 모델이 실패하면 스트림은 finish 없이 start→error로 끝난다.
+          // 모든 모델이 실패하면 스트림은 finish 없이 start→error로 끝난다. 글자가 나온 뒤 끊기면 interrupted.
           // 여기서 직접 구조화 로그를 남기고, ai SDK의 기본 console.error(원시 에러) 출력을 대신한다.
           deps.log({
             event: "chat",
-            outcome: "all_models_failed",
+            outcome: firstTextAt === undefined ? "all_models_failed" : "interrupted",
             error: error instanceof Error ? error.message : String(error),
             totalMs: Date.now() - startedAt,
             postIds,
