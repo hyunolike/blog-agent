@@ -58,19 +58,24 @@ export function buildSources(results: RetrievedChunk[]): { block: string; source
   return { block: parts.join("\n\n"), sources };
 }
 
-export function buildModelMessages(messages: TextMessage[], sourceBlock: string) {
+/** 이전 답변의 [1], [2, 3] 같은 출처 번호. 이번 턴의 출처 번호와 섞이지 않게 지운다. */
+const CITATION_MARKER = /\s*\[\d+(?:\s*,\s*\d+)*\]/g;
+
+export function buildModelMessages(messages: TextMessage[], sourceBlock: string, currentTitle?: string) {
   const last = messages[messages.length - 1]!;
   const history: TextMessage[] = [];
   let used = 0;
   for (const m of messages.slice(0, -1).reverse()) {
-    if (used + m.text.length > PROMPT_BUDGET.historyChars) break;
-    history.unshift(m);
-    used += m.text.length;
+    const text = m.role === "assistant" ? m.text.replace(CITATION_MARKER, "") : m.text;
+    if (used + text.length > PROMPT_BUDGET.historyChars) break;
+    history.unshift({ role: m.role, text });
+    used += text.length;
   }
   // 일부 모델 API는 assistant로 시작하는 대화를 거부하므로 앞쪽 assistant는 버린다
   while (history[0]?.role === "assistant") history.shift();
+  const viewing = currentTitle ? `사용자가 지금 보고 있는 글: [1] ${currentTitle}\n\n` : "";
   return [
     ...history.map((m) => ({ role: m.role, content: m.text })),
-    { role: "user" as const, content: `${sourceBlock}\n\n질문: ${last.text}` },
+    { role: "user" as const, content: `${viewing}${sourceBlock}\n\n질문: ${last.text}` },
   ];
 }

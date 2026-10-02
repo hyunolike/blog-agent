@@ -2,12 +2,14 @@ import { decodeVector } from "./vector";
 import { tokenize } from "./tokenize";
 import type { BlogIndex, Chunk, Post } from "./types";
 
-export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3, currentPostBoost: 0.5 / 61 };
+export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3 };
 
 export type RetrievedChunk = { chunk: Chunk; post: Post; score: number };
 export type SearchInput = { query: string; queryVector: ArrayLike<number> | null; currentPostId: number | null };
 export type Searcher = { search(input: SearchInput): RetrievedChunk[] };
 
+/** 보고 있는 글에서 요약 다음에 넣는 본문 조각 수 */
+const CURRENT_POST_BODY = 2;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 
@@ -78,26 +80,41 @@ export function createSearcher(index: BlogIndex): Searcher {
       for (const ranking of [bm25Ranking(query), vectorRanking(queryVector)]) {
         ranking.forEach((chunkIdx, r) => fused.set(chunkIdx, (fused.get(chunkIdx) ?? 0) + 1 / (SEARCH.rrfK + r + 1)));
       }
-      if (currentPostId !== null) {
-        for (const [i, s] of fused) if (chunks[i]!.postId === currentPostId) fused.set(i, s + SEARCH.currentPostBoost);
+
+      const ranked = [...fused].sort((a, b) => b[1] - a[1]);
+      const picked: RetrievedChunk[] = [];
+      const take = (i: number, score: number) => picked.push({ chunk: chunks[i]!, post: postById.get(chunks[i]!.postId)!, score });
+      const current = currentPostId !== null && postById.has(currentPostId) ? currentPostId : null;
+      let limit = SEARCH.finalCount;
+
+      // 보고 있는 글: 요약이 출처 1번, 이어서 그 글 본문 최대 2개(순위에 없으면 앞쪽 본문 2개)
+      if (current !== null) {
+        limit = SEARCH.finalCount + 1;
+        const summaryIdx = chunks.findIndex((c) => c.postId === current && c.kind === "summary");
+        if (summaryIdx >= 0) take(summaryIdx, fused.get(summaryIdx) ?? 0);
+        const isCurrentBody = (i: number) => chunks[i]!.postId === current && chunks[i]!.kind === "body";
+        let body = ranked.filter(([i]) => isCurrentBody(i)).slice(0, CURRENT_POST_BODY);
+        if (body.length === 0) {
+          const order = (i: number) => Number(chunks[i]!.id.split("-").pop());
+          body = chunks
+            .map((_, i) => i)
+            .filter(isCurrentBody)
+            .sort((a, b) => order(a) - order(b))
+            .slice(0, CURRENT_POST_BODY)
+            .map((i) => [i, 0] as const);
+        }
+        for (const [i, score] of body) take(i, score);
       }
 
       const perPost = new Map<number, number>();
-      const picked: RetrievedChunk[] = [];
-      for (const [i, score] of [...fused].sort((a, b) => b[1] - a[1])) {
-        if (picked.length >= SEARCH.finalCount) break;
-        const chunk = chunks[i]!;
-        const count = perPost.get(chunk.postId) ?? 0;
+      for (const [i, score] of ranked) {
+        if (picked.length >= limit) break;
+        const postId = chunks[i]!.postId;
+        if (postId === current) continue;
+        const count = perPost.get(postId) ?? 0;
         if (count >= SEARCH.perPostCap) continue;
-        perPost.set(chunk.postId, count + 1);
-        picked.push({ chunk, post: postById.get(chunk.postId)!, score });
-      }
-
-      if (currentPostId !== null && postById.has(currentPostId)) {
-        const summary = chunks.find((c) => c.postId === currentPostId && c.kind === "summary");
-        if (summary && !picked.some((r) => r.chunk.id === summary.id)) {
-          picked.push({ chunk: summary, post: postById.get(currentPostId)!, score: 0 });
-        }
+        perPost.set(postId, count + 1);
+        take(i, score);
       }
       return picked;
     },

@@ -74,4 +74,24 @@ describe("buildModelMessages", () => {
       { role: "user", content: "<source id=\"1\">x</source>\n\n질문: 지금 질문" },
     ]);
   });
+
+  it("names the post being viewed right before the sources only when a title is given", () => {
+    const withTitle = buildModelMessages([{ role: "user", text: "이 글 요약해줘" }], "<source id=\"1\">x</source>", "점검 페이지");
+    expect(withTitle.at(-1)!.content).toBe("사용자가 지금 보고 있는 글: [1] 점검 페이지\n\n<source id=\"1\">x</source>\n\n질문: 이 글 요약해줘");
+    const without = buildModelMessages([{ role: "user", text: "질문" }], "<source id=\"1\">x</source>");
+    expect(without.at(-1)!.content).not.toContain("사용자가 지금 보고 있는 글");
+  });
+
+  it("strips old citation markers from previous assistant turns", () => {
+    const msgs = buildModelMessages(
+      [
+        { role: "user", text: "첫 질문 [3]" },
+        { role: "assistant", text: "Edge Config에 둔다[1]. 이유는 둘이다 [2, 3][4]." },
+        { role: "user", text: "더 자세히" },
+      ],
+      "S",
+    );
+    expect(msgs[0]).toEqual({ role: "user", content: "첫 질문 [3]" });
+    expect(msgs[1]).toEqual({ role: "assistant", content: "Edge Config에 둔다. 이유는 둘이다." });
+  });
 });

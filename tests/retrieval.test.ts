@@ -85,6 +85,24 @@ describe("createSearcher", () => {
     expect(results.length).toBeLessThanOrEqual(SEARCH.finalCount + 1);
   });
 
+  it("puts the viewed post's summary first, followed by its body, even for an unrelated query", () => {
+    const results = searcher.search({ query: "systemd", queryVector: [0, 1], currentPostId: 3 });
+    expect(results[0]!.chunk.id).toBe("3-0");
+    expect(results.some((r) => r.chunk.id === "3-1")).toBe(true);
+    expect(results.length).toBeLessThanOrEqual(SEARCH.finalCount + 1);
+  });
+
+  it("falls back to the viewed post's first body chunks when none of them ranked", () => {
+    const results = searcher.search({ query: "systemd", queryVector: null, currentPostId: 3 });
+    expect(results.map((r) => r.chunk.id).slice(0, 2)).toEqual(["3-0", "3-1"]);
+    expect(results.slice(2).every((r) => r.post.id === 1)).toBe(true);
+  });
+
+  it("ignores a viewed post id that is not in the index", () => {
+    const results = searcher.search({ query: "RequiresMountsFor", queryVector: null, currentPostId: 999 });
+    expect(results[0]!.chunk.id).toBe("1-1");
+  });
+
   it("ignores a query vector with the wrong dimensions", () => {
     const results = searcher.search({ query: "redis", queryVector: [1, 0, 0], currentPostId: null });
     expect(results[0]!.post.id).toBe(3);
