@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { embed, generateText } from "ai";
+import { embedMany, generateText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { linkCitations } from "@/lib/citations";
 import { buildModelMessages, buildSources, SYSTEM_PROMPT } from "@/lib/prompt";
 import { createSearcher } from "@/lib/retrieval";
-import type { BlogIndex } from "@/lib/types";
+import type { BlogIndex, SourceRef } from "@/lib/types";
 import { loadQuestions } from "./load";
 
 const REFUSAL = /블로그에는 없는 내용|블로그에 없는|찾을 수 없/;
@@ -21,12 +21,22 @@ async function main() {
   const questions = loadQuestions();
   const rows: Record<string, unknown>[] = [];
 
+  // Embed all questions once
+  const { embeddings } = await embedMany({ model: openrouter.textEmbeddingModel(index.embeddingModel), values: questions.map((q) => q.question) });
+
+  // Search and build sources once per question
+  type SourceBlock = { block: string; sources: SourceRef[] };
+  const sourceBlocks: SourceBlock[] = questions.map((q, i) => {
+    const results = searcher.search({ query: q.question, queryVector: embeddings[i] ?? null, currentPostId: null });
+    return buildSources(results);
+  });
+
   for (const model of models) {
     let passed = 0;
-    for (const q of questions) {
-      const { embedding } = await embed({ model: openrouter.textEmbeddingModel(index.embeddingModel), value: q.question });
-      const results = searcher.search({ query: q.question, queryVector: embedding, currentPostId: null });
-      const { block, sources } = buildSources(results);
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]!;
+      const sb = sourceBlocks[i]!;
+      const { block, sources } = sb;
       const started = Date.now();
       let text = "";
       let error: string | undefined;
@@ -41,7 +51,7 @@ async function main() {
         error = err instanceof Error ? err.message : String(err);
       }
       const { cited } = linkCitations(text, sources);
-      const citedPosts = [...new Set(sources.filter((s) => cited.includes(s.n)).map((s) => s.postId))];
+      const citedPosts = [...new Set(sources.filter((s: SourceRef) => cited.includes(s.n)).map((s: SourceRef) => s.postId))];
       const autoPass =
         !error &&
         (q.type === "none"
