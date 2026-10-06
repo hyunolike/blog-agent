@@ -17,7 +17,7 @@
 
 </div>
 
-> 현재 상태: 구현을 마치고 배포를 준비하고 있습니다. 아래 영상과 화면은 로컬에서 만든 것입니다.
+> 현재 상태: 구현을 마치고 배포를 준비하고 있습니다. 아래 화면은 로컬 서버에서 실제 모델이 답한 장면입니다.
 
 <br>
 
@@ -25,7 +25,7 @@
 
 https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 
-20초 소개 영상입니다. 영상 속 채팅 답변은 화면 시연용으로 넣은 문장이고, 내용은 블로그 70번 글에 실제로 있는 내용입니다. 원본 파일은 [`docs/video/brag.mp4`](docs/video/brag.mp4)에 있습니다.
+20초 소개 영상입니다. 영상은 모델을 연결하기 전에 만들어서, 영상 속 채팅 답변은 화면 시연용으로 넣은 문장입니다. 내용은 블로그 70번 글에 실제로 있는 내용입니다. 원본 파일은 [`docs/video/brag.mp4`](docs/video/brag.mp4)에 있습니다.
 
 <br>
 
@@ -63,7 +63,7 @@ NVIDIA API 카탈로그의 무료 모델로 답합니다. 기본 모델이 8초 
 
 ## 화면 🖥️
 
-| PC: 블로그 오른쪽 아래에서 열린 채팅 | 모바일: 글 페이지에서 열었을 때 |
+| PC: 질문에 출처와 함께 답한 화면 | 모바일: 글 페이지에서 "이 글 3줄 요약해줘" |
 | :---: | :---: |
 | <img src="docs/images/widget-desktop.png" alt="PC에서 채팅 패널이 열린 화면" width="560"> | <img src="docs/images/embed-mobile.png" alt="모바일에서 글 페이지 기준으로 열린 채팅 화면" width="240"> |
 
@@ -170,6 +170,7 @@ npm test
 2. **Upstash:** Redis 데이터베이스(무료)를 만들고 REST URL과 토큰을 복사합니다.
 3. **Vercel:** 이 저장소를 import 하고 환경변수를 넣습니다.
    - `NVIDIA_API_KEY`, `CHAT_MODELS`(쉼표로 구분, 첫 번째가 기본 모델), `EMBEDDING_MODEL`
+   - 2026년 10월 평가에서는 `CHAT_MODELS=nvidia/nemotron-3-super-120b-a12b,openai/gpt-oss-20b`가 가장 좋았습니다. 30문항 자동 채점에서 각각 26개와 27개를 통과했고, 답을 시작하기까지 걸린 시간의 중앙값은 0.25초와 0.8초였습니다.
    - Vercel의 `EMBEDDING_MODEL`은 인덱스를 읽지 못했을 때만 쓰는 대비값입니다. 채팅은 `data/index.json`에 기록된 임베딩 모델로 질문을 임베딩하고, 두 값이 다르면 로그에 `embedding_model_mismatch`를 남깁니다.
    - `APP_ORIGIN` = 배포 주소(예: `https://blog-agent.vercel.app`)
    - `FRAME_ANCESTORS` = `https://hyunolike.tistory.com`
@@ -193,6 +194,7 @@ npm test
 - [ ] `curl -sI https://<배포 주소>/embed | grep -i content-security-policy` → `frame-ancestors https://hyunolike.tistory.com`
 - [ ] `ingest` workflow 수동 실행 → `data/index.json` 커밋 → 재배포 확인
 - [ ] 티스토리 PC와 모바일에서 열기, 닫기, 출처 링크 이동 확인
+- [ ] 입력창에 질문을 직접 써서 "보내기"와 Enter로 전송되는지 확인 (추천 질문 버튼만 눌러 보면 놓칠 수 있음)
 - [ ] 같은 IP로 11번 연속 질문해 요청 제한 안내 문구 확인
 - [ ] 저장소 기본 브랜치가 Vercel 프로덕션 브랜치와 같은지 확인 (매일 수집 커밋이 기본 브랜치로 들어감)
 - [ ] FRAME_ANCESTORS를 바꾸면 재배포 필요 (빌드 시점에 읽음)
