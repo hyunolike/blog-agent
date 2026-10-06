@@ -1,0 +1,46 @@
+{
+  "name": "blog-agent",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "ingest": "tsx ingest/run.ts",
+    "eval:retrieval": "tsx eval/retrieval.ts",
+    "eval:answers": "tsx eval/answers.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "^4.0.19",
+    "@ai-sdk/react": "^4.0.125",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
+    "ai": "^7.0.122",
+    "highlight.js": "^11.12.0",
+    "next": "^16.3.7",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/turndown": "^5.0.6",
+    "cheerio": "^1.2.0",
+    "tsx": "^4.23.15",
+    "turndown": "^7.2.4",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  }
+}

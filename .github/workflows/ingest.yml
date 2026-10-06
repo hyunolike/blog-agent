@@ -1,0 +1,45 @@
+name: ingest
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # 매일 04:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - id: ingest
+        run: npm run ingest
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
+      - name: 검색 품질 평가 (경고만, 배포는 막지 않음)
+        if: steps.ingest.outputs.changed == 'true'
+        continue-on-error: true
+        run: npm run eval:retrieval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
+      - name: 인덱스 커밋
+        if: steps.ingest.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/index.json
+          git commit -m "chore: 블로그 인덱스 갱신"
+          git push
