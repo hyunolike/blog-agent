@@ -248,7 +248,7 @@ type Index = {
 - **iframe 속성:**
   ```html
   <iframe title="블로그 AI 채팅"
-    sandbox="allow-scripts allow-same-origin allow-popups allow-top-navigation-by-user-activation">
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation">
   ```
 - **닫기:** iframe이 `postMessage({ type: "close" })`를 보낸다. 부모는 `event.origin`이 채팅 서버 주소일 때만 처리한다.
 - **열림 상태 유지:** 부모 창 `sessionStorage`에 열림 여부를 저장해, 페이지를 이동해도 열려 있던 패널은 다시 연다. 저장소 접근은 try/catch로 감싼다.
