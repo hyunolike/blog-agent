@@ -16,7 +16,7 @@
     <rect x="194" y="236" width="94" height="30" rx="15" fill="none" stroke="#3a3a3a"/>
     <text x="241" y="256" fill="#d0d0d0" text-anchor="middle">출처 링크</text>
     <rect x="300" y="236" width="150" height="30" rx="15" fill="none" stroke="#3a3a3a"/>
-    <text x="375" y="256" fill="#d0d0d0" text-anchor="middle">무료 → 유료 전환</text>
+    <text x="375" y="256" fill="#d0d0d0" text-anchor="middle">모델 자동 전환</text>
     <rect x="462" y="236" width="124" height="30" rx="15" fill="none" stroke="#3a3a3a"/>
     <text x="524" y="256" fill="#d0d0d0" text-anchor="middle">스크립트 한 줄</text>
   </g>

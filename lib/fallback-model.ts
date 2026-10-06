@@ -6,7 +6,7 @@ import {
   type LanguageModelV4StreamResult,
 } from "@ai-sdk/provider";
 
-export type ModelUsed = { tier: "free" | "paid"; modelId: string; reason?: string };
+export type ModelUsed = { tier: "primary" | "fallback"; modelId: string; reason?: string };
 
 export type FallbackOptions = {
   primary: LanguageModelV4 | null;
@@ -144,26 +144,26 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
       if (primary && !(await safeSkipPrimary(opts.skipPrimary))) {
         try {
           const result = await primary.doGenerate(options);
-          opts.onModelUsed?.({ tier: "free", modelId: primary.modelId });
+          opts.onModelUsed?.({ tier: "primary", modelId: primary.modelId });
           return result;
         } catch (err) {
           if (APICallError.isInstance(err) && err.statusCode === 429) await safeOnPrimaryRateLimited(opts.onPrimaryRateLimited, resetAtFrom(err));
           const result = await fallback.doGenerate(options);
-          opts.onModelUsed?.({ tier: "paid", modelId: fallback.modelId, reason: describe(err) });
+          opts.onModelUsed?.({ tier: "fallback", modelId: fallback.modelId, reason: describe(err) });
           return result;
         }
       }
       const result = await fallback.doGenerate(options);
-      opts.onModelUsed?.({ tier: "paid", modelId: fallback.modelId, reason: primary ? "free-exhausted" : "no-free-models" });
+      opts.onModelUsed?.({ tier: "fallback", modelId: fallback.modelId, reason: primary ? "primary-limited" : "single-model" });
       return result;
     },
 
     async doStream(options) {
-      let reason = primary ? "free-exhausted" : "no-free-models";
+      let reason = primary ? "primary-limited" : "single-model";
       if (primary && !(await safeSkipPrimary(opts.skipPrimary))) {
         try {
           const { result, modelId } = await streamWithFirstToken(primary, options, opts.firstTokenTimeoutMs);
-          opts.onModelUsed?.({ tier: "free", modelId });
+          opts.onModelUsed?.({ tier: "primary", modelId });
           return result;
         } catch (err) {
           if (options.abortSignal?.aborted) throw err;
@@ -172,7 +172,7 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
         }
       }
       const result = await fallback.doStream(options);
-      opts.onModelUsed?.({ tier: "paid", modelId: fallback.modelId, reason });
+      opts.onModelUsed?.({ tier: "fallback", modelId: fallback.modelId, reason });
       return result;
     },
   };

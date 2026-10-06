@@ -128,7 +128,7 @@ describe("handleChat", () => {
     expect(chunks[0].messageMetadata.sources[0]).toMatchObject({ n: 1, postId: 70 });
     expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("답변[1]");
     const meta = chunks.filter((c) => c.messageMetadata?.model);
-    expect(meta.at(-1)!.messageMetadata).toMatchObject({ model: "paid/model", tier: "paid" });
+    expect(meta.at(-1)!.messageMetadata).toMatchObject({ model: "paid/model", tier: "fallback" });
   });
 
   it("still answers with keyword search when embedding fails", async () => {

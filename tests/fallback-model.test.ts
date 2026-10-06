@@ -64,7 +64,7 @@ describe("createFallbackModel", () => {
       onModelUsed: (u) => used.push(u),
     });
     expect((await run(model)).text).toBe("무료 답");
-    expect(used).toEqual([{ tier: "free", modelId: "meta/llama:free" }]);
+    expect(used).toEqual([{ tier: "primary", modelId: "meta/llama:free" }]);
   });
 
   it("falls back and records the reset time on a 429", async () => {
@@ -79,7 +79,7 @@ describe("createFallbackModel", () => {
     });
     expect((await run(model)).text).toBe("유료 답");
     expect(onPrimaryRateLimited).toHaveBeenCalledWith(1790000000000);
-    expect(used[0]).toMatchObject({ tier: "paid", modelId: "paid" });
+    expect(used[0]).toMatchObject({ tier: "fallback", modelId: "paid" });
     expect(used[0]!.reason).toContain("429");
   });
 

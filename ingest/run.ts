@@ -1,8 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
-import { embedMany } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { BLOG_ORIGIN } from "@/lib/config";
+import { DEFAULT_EMBEDDING_MODEL } from "@/lib/env";
+import { createProvider } from "@/lib/provider";
 import type { BlogIndex } from "@/lib/types";
 import { buildIndex, sameContent } from "./build";
 
@@ -16,20 +16,17 @@ async function get(url: string): Promise<string> {
 }
 
 async function main() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY가 필요합니다.");
-  const embeddingModel = process.env.EMBEDDING_MODEL || "openai/text-embedding-3-small";
-  const openrouter = createOpenRouter({ apiKey });
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new Error("NVIDIA_API_KEY가 필요합니다.");
+  const embeddingModel = process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL;
+  const provider = createProvider(apiKey);
 
   const prev: BlogIndex | null = existsSync(INDEX_PATH) ? JSON.parse(readFileSync(INDEX_PATH, "utf8")) : null;
 
   const next = await buildIndex(prev, {
     fetchSitemap: () => get(`${BLOG_ORIGIN}/sitemap.xml`),
     fetchHtml: get,
-    embed: async (texts) => {
-      const { embeddings } = await embedMany({ model: openrouter.textEmbeddingModel(embeddingModel), values: texts });
-      return embeddings;
-    },
+    embed: (texts) => provider.embed(embeddingModel, texts, "passage"),
     embeddingModel,
     now: () => new Date(),
     sleep: (ms) => sleep(ms),
