@@ -105,9 +105,11 @@ describe("handleChat", () => {
   });
 
   it("returns 429 with Retry-After when rate limited", async () => {
+    // 초기화 시각을 요청보다 먼저 정해 둔다. limit() 안에서 정하면 시계가 넘어가는 순간 6초로 계산될 수 있다
+    const reset = Date.now() + 5000;
     const res = await handleChat(
       request(ask("안녕")),
-      deps({ limits: { ...deps().limits, ipMinute: { limit: async () => ({ success: false, reset: Date.now() + 5000 }) } } }),
+      deps({ limits: { ...deps().limits, ipMinute: { limit: async () => ({ success: false, reset }) } } }),
     );
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("5");

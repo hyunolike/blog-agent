@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const DEFAULT_EMBEDDING_MODEL = "nvidia/llama-3.2-nv-embedqa-1b-v1";
+export const DEFAULT_EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b";
 
 const list = (s: string | undefined) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 

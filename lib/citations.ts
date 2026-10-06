@@ -1,7 +1,8 @@
 import type { SourceRef } from "./types";
 
 const CODE = /(```[\s\S]*?```|`[^`\n]*`)/g;
-const CITE = /\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]/g;
+// 일부 모델은 [1] 대신 【1】이나 ［1］을 쓴다. 같은 출처 번호로 받아들인다
+const CITE = /[\[【［](\d{1,2}(?:\s*,\s*\d{1,2})*)[\]】］]/g;
 
 export function linkCitations(markdown: string, sources: SourceRef[]): { markdown: string; cited: number[] } {
   const byN = new Map(sources.map((s) => [s.n, s]));
