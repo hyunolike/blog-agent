@@ -32,9 +32,9 @@ describe("createMemoryFlags", () => {
   it("expires the exhausted flag after its ttl", async () => {
     let now = NOW;
     const flags = createMemoryFlags(() => now);
-    await flags.markFreeExhausted(NOW + 10_000);
-    expect(await flags.isFreeExhausted()).toBe(true);
+    await flags.markPrimaryLimited(NOW + 10_000);
+    expect(await flags.isPrimaryLimited()).toBe(true);
     now += 10_001;
-    expect(await flags.isFreeExhausted()).toBe(false);
+    expect(await flags.isPrimaryLimited()).toBe(false);
   });
 });

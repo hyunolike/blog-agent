@@ -4,6 +4,8 @@
 - 대상 블로그: https://hyunolike.tistory.com/
 - 저장소: `hyunolike/blog-agent` (PUBLIC)
 
+> **2026-10-06 변경:** 모델 제공자를 OpenRouter에서 NVIDIA API 카탈로그(build.nvidia.com)로 바꿨다. 유료 모델은 쓰지 않는다. 답변 모델은 `CHAT_MODELS`에 적은 순서대로 첫 번째가 기본이고, 두 번째가 있으면 첫 번째가 실패하거나 8초 안에 답을 시작하지 못할 때 넘겨받는다. 아래 본문에서 OpenRouter, 무료 모델 체인, 유료 전환, 크레딧 한도를 다룬 부분(3장 일부, 6.5, 8.2의 "최종 상한", 10장 일부)은 이 변경 이전의 내용이다. NVIDIA 무료 API는 약관상 프로토타이핑, 연구, 개발, 테스트 용도라는 점을 알고 선택했다.
+
 ## 1. 목적과 범위
 
 티스토리 블로그에 iframe으로 채팅창을 띄우고, 블로그 글을 근거로 답하는 AI를 만든다.
@@ -246,7 +248,7 @@ type Index = {
 - **iframe 속성:**
   ```html
   <iframe title="블로그 AI 채팅"
-    sandbox="allow-scripts allow-same-origin allow-popups allow-top-navigation-by-user-activation">
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation">
   ```
 - **닫기:** iframe이 `postMessage({ type: "close" })`를 보낸다. 부모는 `event.origin`이 채팅 서버 주소일 때만 처리한다.
 - **열림 상태 유지:** 부모 창 `sessionStorage`에 열림 여부를 저장해, 페이지를 이동해도 열려 있던 패널은 다시 연다. 저장소 접근은 try/catch로 감싼다.

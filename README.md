@@ -10,14 +10,14 @@
 ![Next.js](https://img.shields.io/badge/Next.js_16-000000?logo=nextdotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Vercel AI SDK](https://img.shields.io/badge/AI_SDK_7-000000?logo=vercel&logoColor=white)
-![OpenRouter](https://img.shields.io/badge/OpenRouter-6467F2)
+![NVIDIA](https://img.shields.io/badge/NVIDIA_API-76B900?logo=nvidia&logoColor=white)
 ![Upstash](https://img.shields.io/badge/Upstash_Redis-00E9A3?logo=upstash&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-6E9F18?logo=vitest&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
 
 </div>
 
-> 현재 상태: 구현을 마치고 배포를 준비하고 있습니다. 아래 영상과 화면은 로컬에서 만든 것입니다.
+> 현재 상태: 구현을 마치고 배포를 준비하고 있습니다. 아래 화면은 로컬 서버에서 실제 모델이 답한 장면입니다.
 
 <br>
 
@@ -25,7 +25,7 @@
 
 https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 
-20초 소개 영상입니다. 영상 속 채팅 답변은 화면 시연용으로 넣은 문장이고, 내용은 블로그 70번 글에 실제로 있는 내용입니다. 원본 파일은 [`docs/video/brag.mp4`](docs/video/brag.mp4)에 있습니다.
+20초 소개 영상입니다. 영상은 모델을 연결하기 전에 만들어서, 영상 속 채팅 답변은 화면 시연용으로 넣은 문장입니다. 내용은 블로그 70번 글에 실제로 있는 내용입니다. 원본 파일은 [`docs/video/brag.mp4`](docs/video/brag.mp4)에 있습니다.
 
 <br>
 
@@ -51,9 +51,9 @@ https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 
 의미가 비슷한 글을 찾는 벡터 검색과 단어가 일치하는 글을 찾는 키워드 검색을 함께 씁니다. `RequiresMountsFor`나 `ORA-28040`처럼 정확히 일치해야 하는 용어도 놓치지 않습니다.
 
-### 4. 무료 모델로 답하고, 안 되면 유료 모델이 이어받습니다
+### 4. 모델이 늦거나 실패하면 다른 모델이 이어받습니다
 
-먼저 무료 모델에 요청하고, 8초 안에 답이 시작되지 않거나 오류가 나면 유료 모델로 넘깁니다. 모든 모델이 실패해도 검색된 관련 글 링크는 보여줍니다.
+NVIDIA API 카탈로그의 무료 모델로 답합니다. 기본 모델이 8초 안에 답을 시작하지 못하거나 오류가 나면 두 번째 모델로 넘깁니다. 두 모델이 모두 실패해도 검색된 관련 글 링크는 보여줍니다.
 
 ### 5. 스크립트 한 줄로 붙입니다
 
@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 
 ## 화면 🖥️
 
-| PC: 블로그 오른쪽 아래에서 열린 채팅 | 모바일: 글 페이지에서 열었을 때 |
+| PC: 질문에 출처와 함께 답한 화면 | 모바일: 글 페이지에서 "이 글 3줄 요약해줘" |
 | :---: | :---: |
 | <img src="docs/images/widget-desktop.png" alt="PC에서 채팅 패널이 열린 화면" width="560"> | <img src="docs/images/embed-mobile.png" alt="모바일에서 글 페이지 기준으로 열린 채팅 화면" width="240"> |
 
@@ -74,7 +74,7 @@ https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 | 영역 | 기술 |
 | --- | --- |
 | 앱 | Next.js 16 (App Router), React 19, TypeScript 6 |
-| AI | Vercel AI SDK 7, OpenRouter (답변 모델과 임베딩) |
+| AI | Vercel AI SDK 7, NVIDIA API 카탈로그 (답변 모델과 임베딩) |
 | 검색 | 직접 구현한 BM25와 벡터 검색, RRF 결합 (별도 DB 없이 `data/index.json`) |
 | 수집 | cheerio, turndown, GitHub Actions |
 | 요청 제한 | Upstash Redis |
@@ -94,9 +94,9 @@ flowchart LR
     A --> L{요청 제한<br>Upstash}
     L -->|통과| S[하이브리드 검색<br>BM25 + 벡터 + RRF]
     S --> P[출처 번호를 붙인<br>프롬프트 조립]
-    P --> F[무료 모델 체인]
+    P --> F[기본 모델]
     F -->|8초 안에 시작| R[스트리밍 답변<br>+ 출처 링크]
-    F -.->|오류 또는 지연| D[유료 모델]
+    F -.->|오류 또는 지연| D[두 번째 모델]
     D --> R
     R --> W
 ```
@@ -148,7 +148,7 @@ flowchart LR
 
 #### 4. 공개 저장소라는 전제로 설계했습니다
 
-시스템 프롬프트와 요청 제한 규칙은 누구나 읽을 수 있습니다. 숨겨야 안전한 구조는 만들지 않았고, 비용 상한은 코드가 아니라 OpenRouter 키의 사용 한도로 겁니다.
+시스템 프롬프트와 요청 제한 규칙은 누구나 읽을 수 있습니다. 숨겨야 안전한 구조는 만들지 않았습니다. 답변 모델은 무료 API만 쓰기 때문에 키가 새도 요금이 청구되지 않고, 남용은 IP별 요청 제한과 전체 일일 한도로 막습니다.
 
 자세한 설계는 [설계 문서](docs/superpowers/specs/2026-09-29-blog-chat-agent-design.md)에, 작업 순서는 [구현 계획](docs/superpowers/plans/2026-09-29-blog-chat-agent.md)에 있습니다.
 
@@ -158,7 +158,7 @@ flowchart LR
 
 ```bash
 npm ci
-cp .env.example .env.local   # OPENROUTER_API_KEY, PAID_MODEL, FREE_MODELS 채우기
+cp .env.example .env.local   # NVIDIA_API_KEY, CHAT_MODELS 채우기
 npm run ingest               # data/index.json 생성 (1~2분)
 npm run dev                  # http://localhost:3000/dev-host.html 에서 위젯 확인
 npm test
@@ -166,17 +166,18 @@ npm test
 
 ## 배포
 
-1. **OpenRouter:** API 키를 만들고 키 설정에서 사용 한도(credit limit)를 겁니다. 무료 모델 하루 한도를 1,000회로 늘리려면 크레딧을 $10 이상 한 번 충전합니다.
+1. **NVIDIA:** [build.nvidia.com](https://build.nvidia.com)에서 API 키(`nvapi-`로 시작)를 만듭니다. 무료이고, 계정 전체가 분당 요청 수 제한을 함께 씁니다.
 2. **Upstash:** Redis 데이터베이스(무료)를 만들고 REST URL과 토큰을 복사합니다.
 3. **Vercel:** 이 저장소를 import 하고 환경변수를 넣습니다.
-   - `OPENROUTER_API_KEY`, `FREE_MODELS`, `PAID_MODEL`, `EMBEDDING_MODEL`
+   - `NVIDIA_API_KEY`, `CHAT_MODELS`(쉼표로 구분, 첫 번째가 기본 모델), `EMBEDDING_MODEL`
+   - 2026년 10월 평가에서는 `CHAT_MODELS=nvidia/nemotron-3-super-120b-a12b,openai/gpt-oss-20b`가 가장 좋았습니다. 30문항 자동 채점에서 각각 26개와 27개를 통과했고, 답을 시작하기까지 걸린 시간의 중앙값은 0.25초와 0.8초였습니다.
    - Vercel의 `EMBEDDING_MODEL`은 인덱스를 읽지 못했을 때만 쓰는 대비값입니다. 채팅은 `data/index.json`에 기록된 임베딩 모델로 질문을 임베딩하고, 두 값이 다르면 로그에 `embedding_model_mismatch`를 남깁니다.
    - `APP_ORIGIN` = 배포 주소(예: `https://blog-agent.vercel.app`)
    - `FRAME_ANCESTORS` = `https://hyunolike.tistory.com`
    - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
    - Settings → Git에서 Fork Protection이 켜져 있는지 확인합니다.
 4. **GitHub:** Settings → Secrets and variables → Actions
-   - Secret `OPENROUTER_API_KEY`
+   - Secret `NVIDIA_API_KEY`
    - Variable `EMBEDDING_MODEL`
    - Settings → Code security에서 Secret scanning push protection을 켭니다.
    - Actions 탭에서 `ingest` workflow를 한 번 수동 실행합니다.
@@ -189,20 +190,20 @@ npm test
 ## 배포 전 체크리스트
 
 - [ ] Vercel 환경변수 설정
-- [ ] OpenRouter 키 사용 한도 확인
 - [ ] Secret scanning push protection, Vercel Fork Protection 확인
 - [ ] `curl -sI https://<배포 주소>/embed | grep -i content-security-policy` → `frame-ancestors https://hyunolike.tistory.com`
 - [ ] `ingest` workflow 수동 실행 → `data/index.json` 커밋 → 재배포 확인
 - [ ] 티스토리 PC와 모바일에서 열기, 닫기, 출처 링크 이동 확인
+- [ ] 입력창에 질문을 직접 써서 "보내기"와 Enter로 전송되는지 확인 (추천 질문 버튼만 눌러 보면 놓칠 수 있음)
 - [ ] 같은 IP로 11번 연속 질문해 요청 제한 안내 문구 확인
-- [ ] OpenRouter 설정 → Privacy에서 무료 모델(데이터 정책) 사용이 허용돼 있는지 확인 (꺼져 있으면 무료 호출이 전부 유료로 넘어감)
 - [ ] 저장소 기본 브랜치가 Vercel 프로덕션 브랜치와 같은지 확인 (매일 수집 커밋이 기본 브랜치로 들어감)
 - [ ] FRAME_ANCESTORS를 바꾸면 재배포 필요 (빌드 시점에 읽음)
 
 ## 운영
 
-- Vercel 로그에서 `"event":"chat"` 줄의 `tier`(free/paid)와 `fallbackReason`으로 유료 전환 비율을 봅니다.
-- 유료 전환이 잦으면 `npm run eval:answers`로 무료 모델 후보를 다시 평가해 `FREE_MODELS`를 바꿉니다.
+- Vercel 로그에서 `"event":"chat"` 줄의 `tier`(primary/fallback)와 `fallbackReason`으로 두 번째 모델로 넘어간 비율을 봅니다.
+- 두 번째 모델로 넘어가는 일이 잦거나 쓰던 모델이 카탈로그에서 사라지면, `npm run eval:answers`로 후보를 다시 평가해 `CHAT_MODELS`를 바꿉니다.
+- NVIDIA 무료 API는 약관상 프로토타이핑, 연구, 개발, 테스트 용도입니다. 방문자가 늘어 한도에 자주 걸리면 `lib/provider.ts`만 바꿔 다른 제공자로 옮길 수 있습니다.
 - 스킨을 바꾼 뒤 `ingest`가 `본문 추출 실패`로 멈추면 `ingest/extract.ts`의 `#article-view .contents_style` 선택자를 확인합니다.
 
 <br>

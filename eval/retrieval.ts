@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { embedMany } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createProvider } from "@/lib/provider";
 import { createSearcher } from "@/lib/retrieval";
 import type { BlogIndex } from "@/lib/types";
 import { loadQuestions, retrievalHit } from "./load";
@@ -9,16 +8,14 @@ const TARGET = 0.9;
 
 async function main() {
   const index = JSON.parse(readFileSync("data/index.json", "utf8")) as BlogIndex;
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.NVIDIA_API_KEY;
   const questions = loadQuestions().filter((q) => q.type === "single" || q.type === "multi" || q.type === "keyword");
 
   let vectors: number[][] | null = null;
   if (apiKey) {
-    const openrouter = createOpenRouter({ apiKey });
-    const { embeddings } = await embedMany({ model: openrouter.textEmbeddingModel(index.embeddingModel), values: questions.map((q) => q.question) });
-    vectors = embeddings;
+    vectors = await createProvider(apiKey).embed(index.embeddingModel, questions.map((q) => q.question), "query");
   } else {
-    console.warn("OPENROUTER_API_KEY가 없어 키워드 검색만으로 평가합니다.");
+    console.warn("NVIDIA_API_KEY가 없어 키워드 검색만으로 평가합니다.");
   }
 
   const searcher = createSearcher(index);

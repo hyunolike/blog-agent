@@ -26,14 +26,14 @@ jobs:
       - id: ingest
         run: npm run ingest
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
       - name: 검색 품질 평가 (경고만, 배포는 막지 않음)
         if: steps.ingest.outputs.changed == 'true'
         continue-on-error: true
         run: npm run eval:retrieval
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
       - name: 인덱스 커밋
         if: steps.ingest.outputs.changed == 'true'

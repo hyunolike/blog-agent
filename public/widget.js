@@ -38,7 +38,7 @@
 
   var frame = document.createElement("iframe");
   frame.title = "블로그 AI 채팅";
-  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-top-navigation-by-user-activation");
+  frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation");
   panel.appendChild(frame);
 
   document.body.appendChild(panel);

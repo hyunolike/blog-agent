@@ -105,9 +105,11 @@ describe("handleChat", () => {
   });
 
   it("returns 429 with Retry-After when rate limited", async () => {
+    // 초기화 시각을 요청보다 먼저 정해 둔다. limit() 안에서 정하면 시계가 넘어가는 순간 6초로 계산될 수 있다
+    const reset = Date.now() + 5000;
     const res = await handleChat(
       request(ask("안녕")),
-      deps({ limits: { ...deps().limits, ipMinute: { limit: async () => ({ success: false, reset: Date.now() + 5000 }) } } }),
+      deps({ limits: { ...deps().limits, ipMinute: { limit: async () => ({ success: false, reset }) } } }),
     );
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("5");
@@ -128,7 +130,7 @@ describe("handleChat", () => {
     expect(chunks[0].messageMetadata.sources[0]).toMatchObject({ n: 1, postId: 70 });
     expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("답변[1]");
     const meta = chunks.filter((c) => c.messageMetadata?.model);
-    expect(meta.at(-1)!.messageMetadata).toMatchObject({ model: "paid/model", tier: "paid" });
+    expect(meta.at(-1)!.messageMetadata).toMatchObject({ model: "paid/model", tier: "fallback" });
   });
 
   it("still answers with keyword search when embedding fails", async () => {

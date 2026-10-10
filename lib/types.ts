@@ -42,7 +42,7 @@ export type SourceRef = {
 export type ChatMetadata = {
   sources?: SourceRef[];
   model?: string;
-  tier?: "free" | "paid";
+  tier?: "primary" | "fallback";
 };
 
 export type ChatUIMessage = UIMessage<ChatMetadata>;

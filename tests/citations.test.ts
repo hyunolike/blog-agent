@@ -26,6 +26,14 @@ describe("linkCitations", () => {
     expect(cited).toEqual([1]);
   });
 
+  it("accepts full-width and lenticular brackets that some models emit", () => {
+    const { markdown, cited } = linkCitations("단방향이라 SSE로 충분했다【1】【2】. 정리하면［1］", sources);
+    expect(markdown).toBe(
+      "단방향이라 SSE로 충분했다[\\[1\\]](https://hyunolike.tistory.com/70)[\\[2\\]](https://hyunolike.tistory.com/65). 정리하면[\\[1\\]](https://hyunolike.tistory.com/70)",
+    );
+    expect(cited).toEqual([1, 2]);
+  });
+
   it("leaves brackets inside code untouched", () => {
     const input = "배열은 `arr[1]`처럼 쓰고\n\n```js\nconst a = b[2];\n```\n끝[2]";
     const { markdown } = linkCitations(input, sources);

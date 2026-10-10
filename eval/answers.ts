@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { embedMany, streamText } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { streamText } from "ai";
 import { linkCitations } from "@/lib/citations";
 import { FIRST_TOKEN_TIMEOUT_MS } from "@/lib/llm";
+import { createProvider } from "@/lib/provider";
 import { buildModelMessages, buildSources, SYSTEM_PROMPT } from "@/lib/prompt";
 import { createSearcher } from "@/lib/retrieval";
 import type { BlogIndex, SourceRef } from "@/lib/types";
@@ -20,19 +20,18 @@ function median(values: number[]): number | null {
 async function main() {
   const models = process.argv.slice(2);
   if (models.length === 0) throw new Error("사용법: npm run eval:answers -- <model> [model...]");
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY가 필요합니다.");
+  const apiKey = process.env.NVIDIA_API_KEY;
+  if (!apiKey) throw new Error("NVIDIA_API_KEY가 필요합니다.");
 
   const index = JSON.parse(readFileSync("data/index.json", "utf8")) as BlogIndex;
   const searcher = createSearcher(index);
-  const openrouter = createOpenRouter({ apiKey });
+  const provider = createProvider(apiKey);
   const questions = loadQuestions();
   const rows: Record<string, unknown>[] = [];
 
-  // Embed all questions once
-  const { embeddings } = await embedMany({ model: openrouter.textEmbeddingModel(index.embeddingModel), values: questions.map((q) => q.question) });
+  // 질문 임베딩과 검색은 한 번만 하고 모델마다 다시 쓴다
+  const embeddings = await provider.embed(index.embeddingModel, questions.map((q) => q.question), "query");
 
-  // Search and build sources once per question
   type SourceBlock = { block: string; sources: SourceRef[] };
   const sourceBlocks: SourceBlock[] = questions.map((q, i) => {
     const results = searcher.search({ query: q.question, queryVector: embeddings[i] ?? null, currentPostId: null });
@@ -51,9 +50,9 @@ async function main() {
       let firstTextMs: number | null = null;
       let error: string | undefined;
       try {
-        // 운영과 같이 스트리밍으로 받아 첫 글자까지 걸린 시간을 잰다(무료 체인의 8초 전환 기준과 비교)
+        // 운영과 같이 스트리밍으로 받아 첫 글자까지 걸린 시간을 잰다(8초 전환 기준과 비교)
         const result = streamText({
-          model: openrouter.chat(model),
+          model: provider.chat(model),
           instructions: SYSTEM_PROMPT,
           messages: buildModelMessages([{ role: "user", text: q.question }], block),
           maxOutputTokens: 800,
@@ -89,7 +88,7 @@ async function main() {
     const firstTextMedian = median(firstTextTimes);
     console.log(`\n${model}: 자동 채점 ${passed}/${questions.length}, 첫 토큰 중앙값 ${firstTextMedian === null ? "-" : `${Math.round(firstTextMedian)}ms`}`);
     if (firstTextMedian !== null && firstTextMedian > FIRST_TOKEN_TIMEOUT_MS) {
-      console.log(`⚠️ ${model}: 첫 토큰 중앙값 ${Math.round(firstTextMedian)}ms > ${FIRST_TOKEN_TIMEOUT_MS}ms (무료 체인에서 매번 유료로 넘어갈 수 있음)`);
+      console.log(`⚠️ ${model}: 첫 토큰 중앙값 ${Math.round(firstTextMedian)}ms > ${FIRST_TOKEN_TIMEOUT_MS}ms (기본 모델로 쓰면 매번 두 번째 모델로 넘어갈 수 있음)`);
     }
     console.log("");
   }

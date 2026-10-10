@@ -2,25 +2,29 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_EMBEDDING_MODEL, pickEmbeddingModel, readEnv } from "@/lib/env";
 
 describe("readEnv", () => {
-  it("normalizes allowed origins and parses FREE_MODELS", () => {
+  it("normalizes allowed origins and parses CHAT_MODELS", () => {
     const env = readEnv({
-      OPENROUTER_API_KEY: "k",
-      PAID_MODEL: "p",
+      NVIDIA_API_KEY: "k",
       APP_ORIGIN: "https://chat.example.dev/",
       VERCEL_URL: "abc.vercel.app",
-      FREE_MODELS: " a , b ,",
+      CHAT_MODELS: " a , b ,",
     } as unknown as NodeJS.ProcessEnv);
 
     expect(env.allowedOrigins).toEqual(["https://chat.example.dev", "https://abc.vercel.app"]);
-    expect(env.FREE_MODELS).toEqual(["a", "b"]);
+    expect(env.CHAT_MODELS).toEqual(["a", "b"]);
+  });
+
+  it("requires the key and at least one chat model", () => {
+    expect(() => readEnv({ CHAT_MODELS: "a" } as unknown as NodeJS.ProcessEnv)).toThrow("NVIDIA_API_KEY");
+    expect(() => readEnv({ NVIDIA_API_KEY: "k", CHAT_MODELS: " , " } as unknown as NodeJS.ProcessEnv)).toThrow("CHAT_MODELS");
   });
 });
 
 describe("pickEmbeddingModel", () => {
   it("uses the index's model and reports a differing env value", () => {
-    expect(pickEmbeddingModel("openai/text-embedding-3-small", "openai/text-embedding-3-large")).toEqual({
-      model: "openai/text-embedding-3-small",
-      mismatch: { env: "openai/text-embedding-3-large", index: "openai/text-embedding-3-small" },
+    expect(pickEmbeddingModel("a/small", "a/large")).toEqual({
+      model: "a/small",
+      mismatch: { env: "a/large", index: "a/small" },
     });
     expect(pickEmbeddingModel("a/m", "a/m")).toEqual({ model: "a/m", mismatch: null });
     expect(pickEmbeddingModel("a/m", undefined)).toEqual({ model: "a/m", mismatch: null });
@@ -32,6 +36,6 @@ describe("pickEmbeddingModel", () => {
   });
 
   it("leaves EMBEDDING_MODEL unset when the env does not give one", () => {
-    expect(readEnv({ OPENROUTER_API_KEY: "k", PAID_MODEL: "p" } as unknown as NodeJS.ProcessEnv).EMBEDDING_MODEL).toBeUndefined();
+    expect(readEnv({ NVIDIA_API_KEY: "k", CHAT_MODELS: "m" } as unknown as NodeJS.ProcessEnv).EMBEDDING_MODEL).toBeUndefined();
   });
 });
