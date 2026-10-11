@@ -1,20 +1,34 @@
-Built-in image_gen tool. Generated on 2026-10-11.
+Built-in image_gen tool. Updated on 2026-10-11.
+Edit target: the prior blog-agent architecture illustration.
 
-Initial prompt:
+Style replacement prompt:
 Use case: infographic-diagram
-Asset type: GitHub README architecture illustration for the deployed blog-agent project.
-Primary request: Draw an accurate, charming, cute 3D system architecture diagram in a polished soft clay miniature style. Wide landscape canvas, warm ivory background, generous whitespace, crisp dark labels, restrained pastel coral, lavender, mint and sky blue. Friendly rounded physical browser, server, book, chip and database objects with tiny subtle smile details. Professional technical clarity with playful 3D materials and soft studio shadows. Labels remain flat front-facing readable typography, never perspective-distorted.
+Asset type: replacement architecture illustration in the GitHub README of blog-agent.
+Edit target: the attached existing architecture diagram.
+Primary request: Redesign it using universally recognizable, restrained professional 3D technology icons. The user explicitly rejects the cute character style. Remove EVERY eye, smile, blush, face and anthropomorphic feature. Remove inflated toy-like typography, clay-toy forms and candy pastel styling. Replace these with elegant conventional 3D icons, lightly beveled geometry, subtle realistic matte materials, modest soft shadows and an almost-white background. Use neutral slate, restrained blue, coral for Tistory and green for Redis/NVIDIA. Clear flat typography, readable Korean role labels, generous spacing. It should feel like an approachable engineering diagram, not a children's illustration.
 
-Title at top: "blog-agent"
-Subtitle: "DEPLOYED ARCHITECTURE"
-Make two clear horizontal lanes, separated by whitespace:
-Upper lane label "LIVE CHAT". Browser card at left labeled "Tistory" and "widget.js + /embed". A coral browser window with a tiny chat bubble. Middle large lavender rounded platform labeled "Vercel · Next.js", small endpoint label "POST /api/chat"; on that SAME platform place a small file/book object labeled "data/index.json" and underneath "BM25 + vector". This file is bundled with the deployed app, not a separate database. Right side has two distinct cards: mint cylinder "Upstash Redis", sublabel "Rate limits + cooldown"; green rounded GPU chip "NVIDIA API", sublabel "Chat + embeddings".
-Lower lane label "DAILY INDEXING". Four small rounded cards left to right: coral book stack "Tistory posts"; blue clock/workflow "GitHub Actions", sublabel "04:00 KST"; blue file object "Build index", sublabel "data/index.json"; lavender repository box "GitHub", sublabel "develop".
+Preserve the two-lane overall layout and exact correct architecture, but restyle all objects and text. Title: "blog-agent". Subtitle: "블로그 AI 채팅 구조". All text front-facing, dark and sharply legible.
 
-Exact connector topology (do not add arbitrary links): an arrow from Tistory browser to Vercel labeled "Question"; separate return arrow from Vercel to browser labeled "Stream + sources". Thin two-way connectors from Vercel to Upstash and from Vercel to NVIDIA. Bottom solid arrows: Tistory posts -> GitHub Actions -> Build index -> GitHub. A thin dotted connector from Build index to the SAME upper NVIDIA API chip labeled "Embeddings". A dashed connector from GitHub back up to Vercel labeled "Deploy on changes". Use precise arrowheads and avoid crossed lines; route links through open whitespace.
-Small footer text: "Search data stays in the app. Redis stores limits, not articles."
-Constraints: Render all quoted labels exactly once, except data/index.json appears once on the app file and once in the Build index card. Keep short labels large enough for README viewing. No additional text or fake code. No standalone OpenAI service, no vector database, no storage of conversations in Redis. Do not depict Tistory as hosted on Vercel. No real account secrets, no invented URLs, no watermark, no photoreal people. Output a beautifully finished wide landscape illustration.
+Upper lane label: "질문과 답변"
+Left: standard 3D browser window with a chat bubble, labeled "Tistory" and "블로그 채팅", small technical label "widget.js + /embed".
+Middle: outlined Vercel app boundary with a conventional 3D server rack (clearly a server, not a character or pillow), labeled "Vercel / Next.js" and "채팅 서버", small endpoint label "POST /api/chat". Inside the SAME server boundary, show a separate small conventional file icon labeled "data/index.json" and "글 검색 데이터". This file belongs inside the app.
+Right upper: conventional database cylinder with NO face, labeled "Upstash Redis" and "요청 횟수 제한".
+Right lower: conventional GPU/microchip with NO face, labeled "NVIDIA API" and "답변 생성 + 임베딩".
 
-Final correction prompt:
-Edit this architecture illustration with one precise technical correction. Preserve the entire image, all cute 3D objects, layout, colors, title, labels, solid arrows and the purple dashed "Deploy on changes" connector exactly as they are.
-The blue dotted connector labeled "Embeddings" currently starts at the GitHub repository box. This is incorrect. Re-route ONLY this blue dotted connector so that it visibly starts at the "Build index" file object and ends at the same NVIDIA API chip. GitHub must have NO direct connector to NVIDIA. Build index calls NVIDIA during indexing, then commits its result to GitHub. Route this corrected blue connector through whitespace, visually distinct from the purple deploy link; use a tiny bridge at a crossing if necessary. Keep all text and everything else unchanged.
+Lower lane label: "검색 데이터 갱신"
+Four standard 3D icons left to right:
+a stack of article pages labeled "Tistory posts" and "블로그 글";
+a gear with small clock labeled "GitHub Actions" and "매일 04:00 KST";
+a JSON document labeled "Build index" and "검색 파일 생성";
+a conventional Git repository/folder box labeled "GitHub" and "develop".
+
+Preserve exact connector topology: browser -> server arrow labeled "질문"; separate server -> browser return arrow labeled "답변 + 출처". Server two-way links to Redis and NVIDIA. Bottom solid arrows Tistory posts -> GitHub Actions -> Build index -> GitHub. Dotted link from Build index to NVIDIA labeled "임베딩". Dashed link from GitHub to Vercel labeled "변경 시 재배포". Route clearly in open whitespace; distinct colored links with small bridge at crossings. GitHub must NOT link directly to NVIDIA. No invented extra links.
+Footer: "글 검색 데이터는 서버 파일에, 요청 횟수는 Redis에 저장합니다."
+Constraints: Keep all component names and roles accurate. No external vector database, no conversation storage in Redis, no extra OpenAI service. Tistory remains separate from Vercel. No mascot faces anywhere. The GitHub logo is permitted as a flat brand symbol but never make it a mascot. Avoid overly rounded swollen shapes, huge cartoon title, plastic toys, decorative characters and illegible fine print. Landscape aspect ratio, polished production-ready diagram.
+
+Connector clarification prompt:
+Edit ONLY the two dashed connectors between the two lanes of this diagram. Preserve every object, icon, label, title, color, size and all other solid arrows exactly unchanged.
+The two current blue dashed paths are visually ambiguous and have confusing stubs near GitHub. Erase those TWO dashed paths completely and redraw exactly TWO independent paths:
+1. PURPLE dashed connector "변경 시 재배포": starts at the top center of the GitHub folder and ends with an upward arrow at the bottom of the Vercel app boundary. Same elbow route as before. This path represents GitHub triggering Vercel deployment.
+2. BLUE dashed connector "임베딩": starts visibly on the upper-right corner of the Build index JSON document, travels through whitespace above the GitHub folder, then rises into the bottom of the NVIDIA chip with an upward arrow. It must be one continuous path from Build index to NVIDIA. There must be NO blue connector starting or ending at GitHub. At its crossing with the purple deploy path, add a small overpass arc or gap so the lines are clearly independent; no junction dot.
+Color the deploy label purple and embedding label blue to match each path. Both Korean labels must remain exactly spelled. Do not add any other links or modify anything else.
