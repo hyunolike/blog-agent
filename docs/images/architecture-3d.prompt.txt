@@ -1,0 +1,20 @@
+Built-in image_gen tool. Generated on 2026-10-11.
+
+Initial prompt:
+Use case: infographic-diagram
+Asset type: GitHub README architecture illustration for the deployed blog-agent project.
+Primary request: Draw an accurate, charming, cute 3D system architecture diagram in a polished soft clay miniature style. Wide landscape canvas, warm ivory background, generous whitespace, crisp dark labels, restrained pastel coral, lavender, mint and sky blue. Friendly rounded physical browser, server, book, chip and database objects with tiny subtle smile details. Professional technical clarity with playful 3D materials and soft studio shadows. Labels remain flat front-facing readable typography, never perspective-distorted.
+
+Title at top: "blog-agent"
+Subtitle: "DEPLOYED ARCHITECTURE"
+Make two clear horizontal lanes, separated by whitespace:
+Upper lane label "LIVE CHAT". Browser card at left labeled "Tistory" and "widget.js + /embed". A coral browser window with a tiny chat bubble. Middle large lavender rounded platform labeled "Vercel · Next.js", small endpoint label "POST /api/chat"; on that SAME platform place a small file/book object labeled "data/index.json" and underneath "BM25 + vector". This file is bundled with the deployed app, not a separate database. Right side has two distinct cards: mint cylinder "Upstash Redis", sublabel "Rate limits + cooldown"; green rounded GPU chip "NVIDIA API", sublabel "Chat + embeddings".
+Lower lane label "DAILY INDEXING". Four small rounded cards left to right: coral book stack "Tistory posts"; blue clock/workflow "GitHub Actions", sublabel "04:00 KST"; blue file object "Build index", sublabel "data/index.json"; lavender repository box "GitHub", sublabel "develop".
+
+Exact connector topology (do not add arbitrary links): an arrow from Tistory browser to Vercel labeled "Question"; separate return arrow from Vercel to browser labeled "Stream + sources". Thin two-way connectors from Vercel to Upstash and from Vercel to NVIDIA. Bottom solid arrows: Tistory posts -> GitHub Actions -> Build index -> GitHub. A thin dotted connector from Build index to the SAME upper NVIDIA API chip labeled "Embeddings". A dashed connector from GitHub back up to Vercel labeled "Deploy on changes". Use precise arrowheads and avoid crossed lines; route links through open whitespace.
+Small footer text: "Search data stays in the app. Redis stores limits, not articles."
+Constraints: Render all quoted labels exactly once, except data/index.json appears once on the app file and once in the Build index card. Keep short labels large enough for README viewing. No additional text or fake code. No standalone OpenAI service, no vector database, no storage of conversations in Redis. Do not depict Tistory as hosted on Vercel. No real account secrets, no invented URLs, no watermark, no photoreal people. Output a beautifully finished wide landscape illustration.
+
+Final correction prompt:
+Edit this architecture illustration with one precise technical correction. Preserve the entire image, all cute 3D objects, layout, colors, title, labels, solid arrows and the purple dashed "Deploy on changes" connector exactly as they are.
+The blue dotted connector labeled "Embeddings" currently starts at the GitHub repository box. This is incorrect. Re-route ONLY this blue dotted connector so that it visibly starts at the "Build index" file object and ends at the same NVIDIA API chip. GitHub must have NO direct connector to NVIDIA. Build index calls NVIDIA during indexing, then commits its result to GitHub. Route this corrected blue connector through whitespace, visually distinct from the purple deploy link; use a tiny bridge at a crossing if necessary. Keep all text and everything else unchanged.
