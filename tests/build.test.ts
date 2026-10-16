@@ -51,6 +51,30 @@ describe("buildIndex", () => {
     expect(d.embed).toHaveBeenCalled();
   });
 
+  it("prefixes chunks of tagged posts with their project context and re-embeds only those", async () => {
+    const xml = sitemap([[70, "2026-09-17T23:14:22+09:00"], [1, "2025-09-10T20:39:57+09:00"]]);
+    const first = await buildIndex(null, deps({ xml }));
+    const d = deps({ xml, projects: { 70: "모여락 (DND 14기 IT 동아리 팀 프로젝트)" } });
+    const second = await buildIndex(first, d);
+
+    const tagged = second.chunks.filter((c) => c.postId === 70);
+    expect(tagged.every((c) => c.text.startsWith("프로젝트: 모여락 (DND 14기 IT 동아리 팀 프로젝트)\n"))).toBe(true);
+    expect(tagged.every((c) => c.embedText.startsWith("프로젝트: 모여락"))).toBe(true);
+    expect(second.chunks.filter((c) => c.postId === 1)).toEqual(first.chunks.filter((c) => c.postId === 1));
+    expect(d.embed.mock.calls.flat(2)).toHaveLength(tagged.length);
+  });
+
+  it("does not stack project lines across runs and drops them when the tag is removed", async () => {
+    const xml = sitemap([[70, "2026-09-17T23:14:22+09:00"]]);
+    const plain = await buildIndex(null, deps({ xml }));
+    const projects = { 70: "모여락" };
+    const once = await buildIndex(plain, deps({ xml, projects }));
+    const twice = await buildIndex(once, deps({ xml, projects }));
+    expect(twice.chunks).toEqual(once.chunks);
+    const removed = await buildIndex(twice, deps({ xml }));
+    expect(removed.chunks).toEqual(plain.chunks);
+  });
+
   it("refuses to build from an empty sitemap", async () => {
     await expect(buildIndex(null, deps({ xml: "<urlset></urlset>" }))).rejects.toThrow("sitemap");
   });

@@ -13,12 +13,26 @@ export type BuildDeps = {
   now(): Date;
   sleep(ms: number): Promise<void>;
   log(msg: string): void;
+  /** 글 번호 → 프로젝트 설명. 글 본문에 없는 소속 정보(동아리 이름 등)를 검색에 보탠다. */
+  projects?: Record<number, string>;
 };
 
 const EMBED_BATCH = 64;
 const FETCH_DELAY_MS = 1000;
 
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+const PROJECT_LINE = /^프로젝트: [^\n]*\n/;
+
+/** 이전 실행에서 붙인 프로젝트 줄을 떼고, 지금 태그가 있으면 다시 붙인다. 여러 번 돌려도 줄이 쌓이지 않는다. */
+function withProject(draft: ChunkDraft, project: string | undefined): ChunkDraft {
+  const line = project ? `프로젝트: ${project}\n` : "";
+  return {
+    ...draft,
+    text: line + draft.text.replace(PROJECT_LINE, ""),
+    embedText: line + draft.embedText.replace(PROJECT_LINE, ""),
+  };
+}
 
 export async function buildIndex(prev: BlogIndex | null, deps: BuildDeps): Promise<BlogIndex> {
   const entries = parseSitemap(await deps.fetchSitemap());
@@ -49,7 +63,9 @@ export async function buildIndex(prev: BlogIndex | null, deps: BuildDeps): Promi
   const vectorByHash = new Map<string, string>();
   if (sameModel) for (const c of prev!.chunks) vectorByHash.set(c.hash, c.vector);
 
-  const ordered = [...drafts.keys()].sort((a, b) => a - b).flatMap((id) => drafts.get(id)!);
+  const ordered = [...drafts.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((id) => drafts.get(id)!.map((d) => withProject(d, deps.projects?.[id])));
   const hashed = ordered.map((d) => ({ ...d, hash: sha256(d.embedText) }));
   const missing = hashed.filter((c) => !vectorByHash.has(c.hash));
   deps.log(`embed ${missing.length} / ${hashed.length} chunks`);

@@ -4,11 +4,11 @@ import { loadQuestions, retrievalHit } from "@/eval/load";
 describe("eval questions", () => {
   const qs = loadQuestions();
 
-  it("has 30 uniquely numbered questions in the planned mix", () => {
-    expect(qs).toHaveLength(30);
-    expect(new Set(qs.map((q) => q.id)).size).toBe(30);
+  it("has 31 uniquely numbered questions in the planned mix", () => {
+    expect(qs).toHaveLength(31);
+    expect(new Set(qs.map((q) => q.id)).size).toBe(31);
     const count = (t: string) => qs.filter((q) => q.type === t).length;
-    expect([count("single"), count("multi"), count("keyword"), count("none"), count("injection")]).toEqual([12, 6, 6, 4, 2]);
+    expect([count("single"), count("multi"), count("keyword"), count("none"), count("injection")]).toEqual([12, 7, 6, 4, 2]);
   });
 
   it("gives answerable questions expected posts and the rest none", () => {

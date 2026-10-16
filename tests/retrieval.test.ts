@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSearcher, SEARCH } from "@/lib/retrieval";
+import { createSearcher, isListingQuery, SEARCH } from "@/lib/retrieval";
 import { tokenize } from "@/lib/tokenize";
 import { encodeVector } from "@/lib/vector";
 import type { BlogIndex, Chunk, Post } from "@/lib/types";
@@ -77,6 +77,53 @@ describe("createSearcher", () => {
     const results = searcher.search({ query: "systemd 점검 redis", queryVector: [0.2, 1], currentPostId: null });
     expect(results.length).toBeLessThanOrEqual(SEARCH.finalCount);
     expect(results.filter((r) => r.post.id === 1).length).toBeLessThanOrEqual(SEARCH.perPostCap);
+  });
+
+  it("spreads results over several posts before giving one post more chunks", () => {
+    const wide: BlogIndex = {
+      ...index,
+      posts: [post(1), post(2), post(3), post(4)],
+      chunks: [
+        chunk(1, 1, "a", [1, 0]),
+        chunk(1, 2, "b", [1, 0.01]),
+        chunk(1, 3, "c", [1, 0.02]),
+        chunk(2, 1, "d", [1, 0.03]),
+        chunk(2, 2, "e", [1, 0.04]),
+        chunk(2, 3, "f", [1, 0.05]),
+        chunk(3, 1, "g", [1, 0.5]),
+        chunk(4, 1, "h", [1, 0.6]),
+      ],
+    };
+    const results = createSearcher(wide).search({ query: "", queryVector: [1, 0], currentPostId: null });
+    expect(new Set(results.map((r) => r.post.id))).toEqual(new Set([1, 2, 3, 4]));
+    expect(results[0]!.chunk.id).toBe("1-1");
+    // 고른 뒤에는 다시 점수순으로 돌려놓는다
+    const scores = results.map((r) => r.score);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
+  });
+
+  it("takes one chunk from each of up to listCount posts for listing questions", () => {
+    const many: BlogIndex = {
+      ...index,
+      posts: Array.from({ length: 10 }, (_, i) => post(i + 1)),
+      chunks: Array.from({ length: 10 }, (_, i) => [chunk(i + 1, 1, `동아리 ${i}`, [1, i * 0.01]), chunk(i + 1, 2, `동아리 ${i}`, [1, i * 0.01 + 0.001])]).flat(),
+    };
+    const s = createSearcher(many);
+    const listed = s.search({ query: "동아리 프로젝트 보여줘", queryVector: [1, 0], currentPostId: null });
+    expect(listed).toHaveLength(SEARCH.listCount);
+    expect(new Set(listed.map((r) => r.post.id)).size).toBe(SEARCH.listCount);
+    // 이전 질문에 목록 표현이 있어도 지금 질문 기준으로 판단한다
+    const plain = s.search({ query: "동아리에서 뭘 배웠어?\n동아리 프로젝트 보여줘", queryVector: [1, 0], currentPostId: null });
+    expect(plain).toHaveLength(SEARCH.finalCount);
+  });
+
+  it("recognises listing questions but not single-topic ones", () => {
+    for (const q of ["동아리 관련 프로젝트 보여줘", "운영 장애를 대응한 경험을 정리해줘", "레거시 .NET 시스템에서 어떤 작업들을 했어?", "Redis 쓴 글 전부 알려줘"]) {
+      expect(isListingQuery(q), q).toBe(true);
+    }
+    for (const q of ["Docker 디스크가 100% 찼을 때 어떻게 해결했어?", "실시간 알림에 WebSocket 대신 SSE를 고른 이유는?", "이 글 3줄 요약해줘"]) {
+      expect(isListingQuery(q), q).toBe(false);
+    }
   });
 
   it("always includes the summary of the post being viewed", () => {
