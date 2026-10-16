@@ -20,15 +20,19 @@ async function main() {
 
   const searcher = createSearcher(index);
   let hits = 0;
+  let coverage = 0;
   for (const [i, q] of questions.entries()) {
     const results = searcher.search({ query: q.question, queryVector: vectors?.[i] ?? null, currentPostId: null });
     const postIds = [...new Set(results.map((r) => r.post.id))];
     const ok = retrievalHit(q, postIds);
     if (ok) hits++;
+    // 기대한 글 중 실제로 찾은 비율. 넓은 질문에서 글을 얼마나 고루 가져오는지 본다.
+    coverage += Math.min(1, q.expectedPostIds.filter((id) => postIds.includes(id)).length / Math.min(q.expectedPostIds.length, 6));
     console.log(`${ok ? "✓" : "✗"} ${q.id} [${q.type}] 기대 ${q.expectedPostIds.join(",")} / 검색 ${postIds.join(",")}  ${q.question}`);
   }
   const recall = hits / questions.length;
   console.log(`\nrecall@6 = ${(recall * 100).toFixed(1)}% (${hits}/${questions.length}), 목표 ${TARGET * 100}%, 임베딩 ${index.embeddingModel}`);
+  console.log(`기대 글 커버리지 = ${((coverage / questions.length) * 100).toFixed(1)}%`);
   if (process.env.GITHUB_STEP_SUMMARY && recall < TARGET) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `⚠️ 검색 recall@6 ${(recall * 100).toFixed(1)}%로 목표 90% 미만\n`);

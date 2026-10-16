@@ -5,6 +5,7 @@ import { DEFAULT_EMBEDDING_MODEL } from "@/lib/env";
 import { createProvider } from "@/lib/provider";
 import type { BlogIndex } from "@/lib/types";
 import { buildIndex, sameContent } from "./build";
+import { PROJECTS } from "./projects";
 
 const INDEX_PATH = "data/index.json";
 const USER_AGENT = "blog-agent (+https://github.com/hyunolike/blog-agent)";
@@ -31,6 +32,7 @@ async function main() {
     now: () => new Date(),
     sleep: (ms) => sleep(ms),
     log: (msg) => console.log(`[ingest] ${msg}`),
+    projects: PROJECTS,
   });
 
   const changed = !sameContent(prev, next);

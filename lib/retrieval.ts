@@ -2,7 +2,15 @@ import { decodeVector } from "./vector";
 import { tokenize } from "./tokenize";
 import type { BlogIndex, Chunk, Post } from "./types";
 
-export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3 };
+export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3, minPosts: 4, listCount: 8 };
+
+// "보여줘", "정리해줘", "어떤 작업들", "경험" 같은 표현은 글 하나보다 여러 글을 원하는 질문이다
+const LISTING = /보여\s?줘|목록|전부|전체|모두|정리해|뭐뭐|어떤\s?\S*들|경험/;
+
+/** 지금 질문(검색어 첫 줄)이 여러 글을 훑어 달라는 목록형 질문인지 */
+export function isListingQuery(query: string): boolean {
+  return LISTING.test(query.split("\n")[0] ?? "");
+}
 
 export type RetrievedChunk = { chunk: Chunk; post: Post; score: number };
 export type SearchInput = { query: string; queryVector: ArrayLike<number> | null; currentPostId: number | null };
@@ -85,11 +93,13 @@ export function createSearcher(index: BlogIndex): Searcher {
       const picked: RetrievedChunk[] = [];
       const take = (i: number, score: number) => picked.push({ chunk: chunks[i]!, post: postById.get(chunks[i]!.postId)!, score });
       const current = currentPostId !== null && postById.has(currentPostId) ? currentPostId : null;
-      let limit = SEARCH.finalCount;
+      // 목록형 질문은 칸을 늘리고 글마다 한 조각씩만 담아 더 많은 글을 보여준다
+      const listing = isListingQuery(query);
+      let limit = listing ? SEARCH.listCount : SEARCH.finalCount;
 
       // 보고 있는 글: 요약이 출처 1번, 이어서 그 글 본문 최대 2개(순위에 없으면 앞쪽 본문 2개)
       if (current !== null) {
-        limit = SEARCH.finalCount + 1;
+        limit += 1;
         const summaryIdx = chunks.findIndex((c) => c.postId === current && c.kind === "summary");
         if (summaryIdx >= 0) take(summaryIdx, fused.get(summaryIdx) ?? 0);
         const isCurrentBody = (i: number) => chunks[i]!.postId === current && chunks[i]!.kind === "body";
@@ -106,16 +116,25 @@ export function createSearcher(index: BlogIndex): Searcher {
         for (const [i, score] of body) take(i, score);
       }
 
+      // 다른 글: 먼저 서로 다른 글 minPosts개의 최고 조각을 고르고, 남은 칸은 순위대로 글당 perPostCap까지 채운다.
+      // "Redis를 어디에 써봤어?" 같은 넓은 질문에서 한 글이 칸을 독차지하지 않게 한다.
+      const others = ranked.filter(([i]) => chunks[i]!.postId !== current);
+      const slots = limit - picked.length;
+      const chosen = new Set<number>();
       const perPost = new Map<number, number>();
-      for (const [i, score] of ranked) {
-        if (picked.length >= limit) break;
-        const postId = chunks[i]!.postId;
-        if (postId === current) continue;
-        const count = perPost.get(postId) ?? 0;
-        if (count >= SEARCH.perPostCap) continue;
-        perPost.set(postId, count + 1);
-        take(i, score);
-      }
+      const fill = (cap: number, until: number) => {
+        for (const [i] of others) {
+          if (chosen.size >= until) return;
+          const postId = chunks[i]!.postId;
+          const count = perPost.get(postId) ?? 0;
+          if (chosen.has(i) || count >= cap) continue;
+          perPost.set(postId, count + 1);
+          chosen.add(i);
+        }
+      };
+      fill(1, listing ? slots : Math.min(SEARCH.minPosts, slots));
+      fill(SEARCH.perPostCap, slots);
+      for (const [i, score] of others) if (chosen.has(i)) take(i, score);
       return picked;
     },
   };
