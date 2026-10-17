@@ -1,0 +1,47 @@
+# INACTIVE TEMPLATE: review README's approval/setup steps before copying to
+# .github/workflows/debtdraft.yml. Do not use pull_request_target.
+name: DebtDraft (opt-in)
+
+on:
+  pull_request:
+  push:
+    branches: [develop] # Update if the repository's default branch changes.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debtdraft-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  health-check:
+    # Fork PRs and Dependabot never enter the job that can access the API key.
+    if: >-
+      github.repository == 'hyunolike/blog-agent' &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:coverage
+      # Same runner: DebtDraft consumes this report; it never runs tests itself.
+      # This step authenticates and sends analysis metadata to external services.
+      - name: Analyze and upload to DebtDraft
+        uses: debtdraft/debtdraft-action@03d163dc0e4637c2e06c1f2c18e3f7a9ceb13909 # v1.0.5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          api-key: ${{ secrets.DEBTDRAFT_API_KEY }}
+          coverage-files: coverage/lcov.info
