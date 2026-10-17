@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "ingest": "tsx --env-file-if-exists=.env.local ingest/run.ts",
     "eval:retrieval": "tsx --env-file-if-exists=.env.local eval/retrieval.ts",
-    "eval:answers": "tsx --env-file-if-exists=.env.local eval/answers.ts"
+    "eval:answers": "tsx --env-file-if-exists=.env.local eval/answers.ts",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.63",
@@ -37,10 +38,11 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/turndown": "^5.0.6",
+    "@vitest/coverage-v8": "5.0.2",
     "cheerio": "^1.2.0",
     "tsx": "^4.23.15",
     "turndown": "^7.2.4",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.2"
+    "vitest": "5.0.2"
   }
 }
