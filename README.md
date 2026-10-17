@@ -147,14 +147,54 @@ npm run dev                 # http://localhost:3000/dev-host.html 에서 위젯 
 
 인덱스를 갱신하려면 `npm run ingest`를 실행합니다. 로컬에서 Redis 설정을 비워두면 메모리 요청 제한을 사용하며, 배포에서는 인스턴스 사이에 요청 수를 공유하도록 Redis를 설정합니다.
 
-검증 명령은 다음과 같습니다. 검색 평가에는 실제 NVIDIA API 호출이 필요합니다.
+기본 검증은 API 키 없이 실행할 수 있습니다.
 
 ```bash
 npm test
-npm run build
+npm run test:coverage
 npm run typecheck
-npm run eval:retrieval
+npm run build
+# .env.local을 읽지 않고 NVIDIA 키도 비워 키워드 검색만 평가 (macOS/Linux)
+NVIDIA_API_KEY='' node --import tsx eval/retrieval.ts
 ```
+
+### PR 검사와 커버리지
+
+[`CI`](.github/workflows/ci.yml)는 모든 PR과 `develop` push에서 Node.js 22로 `npm ci`, 커버리지를 포함한 단위 테스트, 키워드 검색 평가, 타입 검사, 빌드를 실행합니다. 모델·Redis 비밀키를 주입하지 않으며, NVIDIA 호출은 하지 않습니다. 의존성 설치와 GitHub artifact 업로드에는 네트워크를 사용합니다. 검색 평가의 기존 목표 90%는 유지합니다.
+
+Vitest와 `@vitest/coverage-v8`의 버전을 맞추고, `coverage/lcov.info`, `coverage/coverage-final.json`, HTML 보고서를 생성합니다. CI의 `coverage-<run_id>-<attempt>` artifact에서 7일 동안 확인할 수 있습니다. HTML/JSON에는 소스나 경로가 포함될 수 있으므로 artifact 열람 권한도 고려하세요. DebtDraft 등 외부 분석 서비스에는 업로드하지 않습니다.
+
+커버리지 범위는 `lib/`, `ingest/`, `app/`의 TS/TSX, `public/widget.js`, `eval/`의 TS입니다. 테스트가 import하지 않은 API 진입점, UI, 수집·평가 실행 파일도 0%로 표시되도록 명시했습니다. 타입 선언 파일은 제외합니다. 아직 DOM/E2E 테스트가 없으므로 UI의 0%를 숨기지 않으며, 전체 수치를 올리려고 범위를 줄이거나 임의의 최소 커버리지 기준을 적용하지 않았습니다.
+
+### 별도 실행하는 모델 평가
+
+`npm run eval:retrieval`은 `.env.local`을 읽습니다. `NVIDIA_API_KEY`가 있으면 질문을 NVIDIA로 전송해 임베딩하고, 없으면 키워드만 평가합니다. `npm run eval:answers -- <model> [model...]`은 키가 필수이며, 질문 임베딩과 모델별 답변 생성에 실제 외부 API를 사용합니다. 질문과 검색된 블로그 근거가 제공자에게 전송되고 할당량·비용이 발생할 수 있어 기본 PR CI에 넣지 않았습니다. 비용과 제공자 사용 조건을 확인한 뒤 개발자가 별도로 실행하세요. 기존 자동 수집 workflow의 임베딩 검색 평가는 그대로 유지합니다.
+
+### DebtDraft 연동 준비 (기본 비활성)
+
+[`docs/workflows/debtdraft.yml.example`](docs/workflows/debtdraft.yml.example)은 실행되지 않는 템플릿입니다. 현재 CI는 DebtDraft를 호출하지 않습니다. 계정 생성, 저장소 연결/OAuth·App 설치, 키 발급·등록 및 분석 전송은 이 변경에 포함되지 않습니다.
+
+공식 [`README`](https://github.com/debtdraft/debtdraft-action/blob/03d163dc0e4637c2e06c1f2c18e3f7a9ceb13909/README.md), [`action.yml`](https://github.com/debtdraft/debtdraft-action/blob/03d163dc0e4637c2e06c1f2c18e3f7a9ceb13909/action.yml), [`LICENSE`](https://github.com/debtdraft/debtdraft-action/blob/03d163dc0e4637c2e06c1f2c18e3f7a9ceb13909/LICENSE)를 확인한 `v1.0.5` 커밋으로 고정했습니다. GitHub 제공 액션도 커밋 SHA로 고정했습니다. 갱신 시 새 릴리스의 동작·권한·약관을 다시 검토하세요.
+
+- DebtDraft는 테스트를 실행하지 않습니다. 템플릿은 같은 job에서 먼저 테스트하고 생성한 `coverage/lcov.info`를 `coverage-files` 입력으로 전달합니다. 보고서가 없으면 커버리지가 n/a로 빠지므로 테스트·보고서 생성 실패를 무시하지 않습니다.
+- 복잡도, 커버리지, 중복, 오래된 의존성, 취약 의존성을 평가합니다. 공식 설명상 소스·코드 조각·환경변수·GitHub 토큰·비밀 값은 DebtDraft에 업로드하지 않습니다. 다만 파일 경로, 함수명, 행·범위, 패키지명·버전, 취약점 정보, 점수, 저장소 ID·커밋 SHA·PR 번호는 전송합니다. 이는 공식 문서의 설명이며 전송이 없는 로컬 전용 도구라는 의미는 아닙니다.
+- API 키를 bearer token으로 사용해 분석 전 저장소 연결 상태를 확인합니다. 분석 결과 업로드는 PR 및 기본 브랜치 push에서 발생합니다. 패키지명·버전은 레지스트리 정보 및 취약점 조회 서비스에도 전송합니다. 공식 설명상 사설 레지스트리 scope는 조회에서 제외합니다. 템플릿은 기본 HTTPS API 주소를 유지합니다.
+- 키가 없거나 유효하지 않거나 저장소 연결·플랜 제한에 걸리면 실패합니다. 서비스 일시 장애, 업로드 제한(429), PR 댓글 권한 오류는 경고만 남길 수 있으므로 초록색 job만으로 대시보드 저장을 보장할 수 없습니다.
+- 비밀 탐지는 별도 결과이며, 기본값은 PR 변경 행에 새 고신뢰 비밀이 있을 때 실패합니다. 전체 git 이력이나 활성 여부를 검사하지 않으며 일부 파일은 제외됩니다. 보안 검토나 별도 비밀 탐지를 대신하지 않습니다.
+- 라이선스는 **All rights reserved**입니다. DebtDraft 계정과 함께 자신의 저장소 Actions에서 사용할 수 있으나 수정·재배포·파생 서비스 등에 제한이 있습니다. 액션 자체 비용과 서비스 플랜은 별개이며 [서비스 약관](https://debtdraft.dev/terms)과 [개인정보 정책](https://debtdraft.dev/privacy)도 확인해야 합니다. 이 저장소에는 액션 구현을 복사하지 않았습니다.
+
+활성화하려면 사용자가 다음 순서로 진행해야 합니다.
+
+1. 위 분석 정보의 외부 전송, 라이선스와 서비스 조건, 사용할 플랜을 검토하고 **활성화를 별도로 승인**합니다.
+2. 승인 후 DebtDraft 계정에서 이 저장소를 연결합니다. OAuth/App 권한 요청이 나오면 요청 권한을 검토하고 승인합니다.
+3. DebtDraft Settings → API keys에서 키를 발급하고 GitHub 저장소 Settings → Secrets and variables → Actions에 `DEBTDRAFT_API_KEY`로 등록합니다. 키를 파일이나 PR에 넣지 않습니다.
+4. 템플릿을 `.github/workflows/debtdraft.yml`로 복사하는 별도 PR을 검토합니다. 기본 브랜치가 `develop`인지 다시 확인합니다. 템플릿은 `contents: read`, 해당 job에만 댓글용 `pull-requests: write`를 부여하고 checkout 인증을 남기지 않습니다.
+5. 템플릿은 fork PR과 Dependabot을 키 접근 job 전체에서 제외합니다. `pull_request_target`으로 바꾸지 마세요. 같은 저장소 PR의 테스트·의존성 코드도 runner에서 실행되므로 신뢰한 기여자/변경에만 허용하고, 필요하면 키를 필수 승인자가 있는 GitHub Environment로 옮기고 job에 해당 `environment`를 지정하세요. SHA 고정과 fork 차단만으로 악성 의존성이나 같은 저장소의 악성 PR까지 막지는 못합니다.
+6. 활성화 PR이 승인된 뒤 신뢰한 PR/기본 브랜치에서 첫 실행의 로그, 댓글, 대시보드를 확인합니다. 검증 전 DebtDraft를 필수 병합 검사로 지정하지 마세요. 중지하려면 workflow를 비활성화하고 키를 폐기합니다.
+
+GitHub Actions의 결제·사용 한도로 runner가 시작되지 않으면 코드 검사 결과가 아닙니다. 실행 페이지의 시작 오류를 확인하고, 로컬 검증 결과와 CI 실행 결과를 구분하세요.
+
+이 준비 작업의 `codex/pr-ci-coverage-debtdraft` 브랜치는 [`vercel.json`](vercel.json)의 [브랜치별 설정](https://vercel.com/docs/project-configuration/git-configuration#git.deploymentenabled)으로 Vercel 자동 배포에서 제외합니다. Draft PR 검토 중 Preview가 생성되지 않게 하기 위한 설정입니다.
 
 ## 배포
 
