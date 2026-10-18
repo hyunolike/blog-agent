@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/pr-ci-coverage-debtdraft": false,
+      "codex/grounded-answer-retrieval": false
+    }
+  }
+}

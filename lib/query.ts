@@ -26,7 +26,9 @@ export function isComparisonQuery(query: string): boolean {
 
 export function isCurrentPostQuery(query: string): boolean {
   const current = query.split("\n")[0]?.trim() ?? "";
-  return /이\s*글|현재\s*글|보고\s*있는\s*글|이\s*포스트/.test(current) || /^(?:\d+\s*줄\s*)?요약(?:해\s*줘|해|해줘요|해\s*주세요)?[.!?\s]*$/.test(current);
+  return /이\s*글|현재\s*글|보고\s*있는\s*글|이\s*포스트/.test(current) ||
+    /^(?:\d+\s*줄\s*)?요약(?:해\s*줘|해|해줘요|해\s*주세요)?[.!?\s]*$/.test(current) ||
+    (isFollowUpQuery(current) && !!query.split("\n")[1] && isCurrentPostQuery(query.split("\n").slice(1).join("\n")));
 }
 
 export function isFollowUpQuery(query: string): boolean {

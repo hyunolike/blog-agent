@@ -33,11 +33,7 @@ function createTurndown(): TurndownService {
       (node.nodeName === "STRONG" || node.nodeName === "B" || node.nodeName === "EM" || node.nodeName === "I") &&
       !!node.parentNode &&
       /^H[1-6]$/.test(node.parentNode.nodeName),
-    replacement: (content, node) => {
-      const href = (node as HTMLElement).getAttribute("href");
-      const id = parseBlogPostId(href);
-      return id === null ? content : `[${content}](${BLOG_ORIGIN}/${id})`;
-    },
+    replacement: (content) => content,
   });
 
   td.addRule("tistoryCode", {
@@ -66,7 +62,7 @@ function createTurndown(): TurndownService {
     },
   });
 
-  td.addRule("linkTextOnly", {
+  td.addRule("internalArticleLink", {
     filter: "a",
     replacement: (content, node) => {
       const href = (node as HTMLElement).getAttribute("href");

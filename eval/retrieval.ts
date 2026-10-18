@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createProvider } from "@/lib/provider";
-import { createSearcher } from "@/lib/retrieval";
+import { createSearcher, SEARCH } from "@/lib/retrieval";
 import type { BlogIndex } from "@/lib/types";
 import { loadQuestions, retrievalHit } from "./load";
 
@@ -26,16 +26,17 @@ async function main() {
     const postIds = [...new Set(results.map((r) => r.post.id))];
     const ok = retrievalHit(q, postIds);
     if (ok) hits++;
-    // 기대한 글 중 실제로 찾은 비율. 넓은 질문에서 글을 얼마나 고루 가져오는지 본다.
-    coverage += Math.min(1, q.expectedPostIds.filter((id) => postIds.includes(id)).length / Math.min(q.expectedPostIds.length, 6));
+    // Expected IDs can be alternatives for broad questions; this is article coverage, not answer correctness.
+    coverage += q.expectedPostIds.filter((id) => postIds.includes(id)).length / q.expectedPostIds.length;
     console.log(`${ok ? "✓" : "✗"} ${q.id} [${q.type}] 기대 ${q.expectedPostIds.join(",")} / 검색 ${postIds.join(",")}  ${q.question}`);
   }
+  console.log(`검색 한도: 단순 ${SEARCH.finalCount}, 목록 ${SEARCH.listCount} 조각, 비교는 최대 2개 관계 확장 (고정 recall@6가 아님)`);
   const recall = hits / questions.length;
-  console.log(`\nrecall@6 = ${(recall * 100).toFixed(1)}% (${hits}/${questions.length}), 목표 ${TARGET * 100}%, 임베딩 ${index.embeddingModel}`);
-  console.log(`기대 글 커버리지 = ${((coverage / questions.length) * 100).toFixed(1)}%`);
+  console.log(`\n검색 적중률 = ${(recall * 100).toFixed(1)}% (${hits}/${questions.length}), 목표 ${TARGET * 100}%, 임베딩 ${index.embeddingModel}`);
+  console.log(`기대/대안 글 회수율 = ${((coverage / questions.length) * 100).toFixed(1)}%`);
   if (process.env.GITHUB_STEP_SUMMARY && recall < TARGET) {
     const { appendFileSync } = await import("node:fs");
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `⚠️ 검색 recall@6 ${(recall * 100).toFixed(1)}%로 목표 90% 미만\n`);
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `⚠️ 검색 적중률 ${(recall * 100).toFixed(1)}%로 목표 90% 미만\n`);
   }
   if (recall < TARGET) process.exit(1);
 }

@@ -135,6 +135,12 @@ describe("createSearcher", () => {
   it("anchors explicit this-post questions with its summary and body", () => {
     const results = searcher.search({ query: "이 글 3줄 요약해줘", queryVector: null, currentPostId: 3 });
     expect(results.map((r) => r.chunk.id).slice(0, 2)).toEqual(["3-0", "3-1"]);
+    expect(results.every((r) => r.post.id === 3)).toBe(true);
+  });
+
+  it("keeps a viewed-post follow-up scoped to the explicitly referenced article", () => {
+    const results = searcher.search({ query: "그거 더 자세히\n이 글 3줄 요약해줘", queryVector: null, currentPostId: 3 });
+    expect(results.map((r) => r.chunk.id)).toEqual(["3-0", "3-1"]);
   });
 
   it("supports a standalone summary request on a viewed post", () => {

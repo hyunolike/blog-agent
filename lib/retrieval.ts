@@ -130,6 +130,9 @@ export function createSearcher(index: BlogIndex): Searcher {
             .map((i) => [i, 0] as const);
         }
         for (const [i, score] of body) take(i, score);
+        // A question about this article needs its own evidence, not unrelated
+        // articles that happen to match words such as "summary".
+        if (!isComparisonQuery(query)) return picked;
       }
 
       // Diversity is useful for lists/comparisons, not a reason to pad a simple

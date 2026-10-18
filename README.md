@@ -43,9 +43,9 @@ https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 
 답변의 `[1]` 같은 출처 번호를 누르면 해당 글로 이동합니다. 실제 인용한 글만 답변 아래 출처 카드로 보여줍니다.
 
-### 2. 보고 있는 글을 알고 답합니다
+### 2. 현재 글을 지정한 질문에 문맥을 반영합니다
 
-글 페이지에서 채팅을 열면 "이 글 3줄 요약해줘" 같은 질문을 바로 할 수 있습니다. 인덱스에 있는 글이면 그 글의 요약을 첫 번째 근거로 넣고, 본문 조각도 함께 제공합니다.
+글 페이지에서 채팅을 열면 "이 글 3줄 요약해줘" 같은 질문을 바로 할 수 있습니다. "이 글"이나 현재 글 요약을 명시한 경우에 그 글의 요약과 본문을 우선합니다. 독립된 다른 질문에는 현재 글을 강제로 넣지 않습니다.
 
 ### 3. 기술 용어를 정확히 찾습니다
 
@@ -105,7 +105,7 @@ https://github.com/user-attachments/assets/a620696a-b0b8-47b7-994d-a1af05d0aa76
 ```text
 .
 ├── ingest/            # sitemap 읽기, 본문 추출, 조각 나누기, 인덱스 빌드
-├── lib/               # 검색, 프롬프트, 모델 전환, 요청 제한
+├── lib/               # 검색, 제한된 근거 관계 확장, 프롬프트, 모델 전환, 요청 제한
 ├── app/
 │   ├── api/chat/      # 스트리밍 채팅 API
 │   └── embed/         # iframe에 들어가는 채팅 화면
@@ -147,13 +147,14 @@ npm run dev                 # http://localhost:3000/dev-host.html 에서 위젯 
 
 인덱스를 갱신하려면 `npm run ingest`를 실행합니다. 로컬에서 Redis 설정을 비워두면 메모리 요청 제한을 사용하며, 배포에서는 인스턴스 사이에 요청 수를 공유하도록 Redis를 설정합니다.
 
-검증 명령은 다음과 같습니다. 검색 평가에는 실제 NVIDIA API 호출이 필요합니다.
+검증 명령은 다음과 같습니다. 검색 적중률은 생성 답변의 정답률이 아닙니다. [근거 선택·관계 확장·분리 평가와 운영 점검 기록](docs/answer-quality.md)을 참고하세요.
 
 ```bash
 npm test
 npm run build
 npm run typecheck
-npm run eval:retrieval
+npm run eval:grounding
+NVIDIA_API_KEY='' node --import tsx eval/retrieval.ts # API와 .env 로딩 없는 키워드 평가
 ```
 
 ## 배포

@@ -98,7 +98,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
   const results = deps.searcher.search({ query, queryVector, currentPostId });
   const { block, sources, relations } = buildSources(results);
   // A viewing hint is authoritative only when the user actually refers to that post.
-  const currentTitle = isCurrentPostQuery(question.text) && currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
+  const currentTitle = isCurrentPostQuery(query) && currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
 
   let used: ModelUsed | undefined;
   let firstTextAt: number | undefined;
