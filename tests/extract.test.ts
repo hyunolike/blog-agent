@@ -78,3 +78,12 @@ describe("extractPost", () => {
     expect(() => extractPost(html, "https://hyunolike.tistory.com/999")).toThrow("본문 추출 실패");
   });
 });
+
+
+describe("internal link evidence", () => {
+  it("preserves same-blog article links but strips external destinations", () => {
+    const md = htmlToMarkdown('<p><a href="https://hyunolike.tistory.com/25">이전 Oracle 글</a> <a href="https://other.example/secret">외부</a></p>');
+    expect(md).toContain('[이전 Oracle 글](https://hyunolike.tistory.com/25)');
+    expect(md).not.toContain('other.example');
+  });
+});

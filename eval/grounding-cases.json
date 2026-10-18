@@ -1,0 +1,84 @@
+[
+  {
+    "id": "oracle-link",
+    "question": "ORA-28040 해결과 Oracle Client 구조의 관계를 비교해줘",
+    "requiredPostIds": [
+      40,
+      25
+    ],
+    "relationKind": "link"
+  },
+  {
+    "id": "runtime-link",
+    "question": "프론트엔드와 백엔드 런타임 글의 관계를 비교해줘",
+    "requiredPostIds": [
+      55,
+      56
+    ],
+    "relationKind": "link"
+  },
+  {
+    "id": "redis-comparison",
+    "question": "Redis 캐시와 Redis 분산락 적용 방식을 비교해줘",
+    "requiredPostIds": [
+      15,
+      20
+    ],
+    "relationKind": "concept"
+  },
+  {
+    "id": "unrelated-view",
+    "question": "RequiresMountsFor는 어디에 썼어?",
+    "currentPostId": 70,
+    "requiredPostIds": [
+      65
+    ],
+    "forbiddenPostIds": [
+      70
+    ],
+    "maxRelations": 0
+  },
+  {
+    "id": "this-post",
+    "question": "이 글 3줄 요약해줘",
+    "currentPostId": 70,
+    "requiredPostIds": [
+      70
+    ],
+    "maxRelations": 0,
+    "forbiddenPostIds": [
+      24,
+      23,
+      40,
+      50
+    ]
+  },
+  {
+    "id": "topic-switch",
+    "previousQuestion": "systemd timer 왜 썼어?",
+    "question": "ORA-28040 에러는 어떻게 해결했어?",
+    "requiredPostIds": [
+      40
+    ],
+    "forbiddenPostIds": [
+      62
+    ],
+    "maxRelations": 0
+  },
+  {
+    "id": "follow-up",
+    "previousQuestion": "Amazon Linux 2023에서 cron 대신 systemd timer를 쓴 이유가 뭐야?",
+    "question": "그거 더 자세히",
+    "requiredPostIds": [
+      62
+    ],
+    "maxRelations": 0
+  },
+  {
+    "id": "unknown-topic",
+    "question": "zxqvunknownentity",
+    "requiredPostIds": [],
+    "maxSources": 0,
+    "maxRelations": 0
+  }
+]

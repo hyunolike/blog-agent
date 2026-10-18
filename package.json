@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "ingest": "tsx --env-file-if-exists=.env.local ingest/run.ts",
     "eval:retrieval": "tsx --env-file-if-exists=.env.local eval/retrieval.ts",
-    "eval:answers": "tsx --env-file-if-exists=.env.local eval/answers.ts"
+    "eval:answers": "tsx --env-file-if-exists=.env.local eval/answers.ts",
+    "eval:grounding": "node --import tsx eval/grounding.ts",
+    "eval:review": "node --import tsx eval/review.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.63",

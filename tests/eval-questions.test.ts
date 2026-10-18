@@ -4,11 +4,11 @@ import { loadQuestions, retrievalHit } from "@/eval/load";
 describe("eval questions", () => {
   const qs = loadQuestions();
 
-  it("has 31 uniquely numbered questions in the planned mix", () => {
-    expect(qs).toHaveLength(31);
-    expect(new Set(qs.map((q) => q.id)).size).toBe(31);
+  it("has 34 uniquely numbered questions in the planned mix", () => {
+    expect(qs).toHaveLength(34);
+    expect(new Set(qs.map((q) => q.id)).size).toBe(34);
     const count = (t: string) => qs.filter((q) => q.type === t).length;
-    expect([count("single"), count("multi"), count("keyword"), count("none"), count("injection")]).toEqual([12, 7, 6, 4, 2]);
+    expect([count("single"), count("multi"), count("keyword"), count("none"), count("injection")]).toEqual([12, 10, 6, 4, 2]);
   });
 
   it("gives answerable questions expected posts and the rest none", () => {
@@ -30,4 +30,9 @@ describe("retrievalHit", () => {
     expect(retrievalHit(q, [1, 9])).toBe(false);
     expect(retrievalHit(q, [1, 3])).toBe(true);
   });
+});
+
+
+it("requires all explicitly required comparison articles rather than just any two", () => {
+  expect(retrievalHit({ id: "compare", type: "multi", question: "", expectedPostIds: [1, 2, 3], requiredPostIds: [1, 2, 3] }, [1, 2])).toBe(false);
 });

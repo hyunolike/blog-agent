@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import TurndownService from "turndown";
+import { BLOG_ORIGIN, parseBlogPostId } from "@/lib/config";
 import type { Post } from "@/lib/types";
 
 export const MIN_BODY_CHARS = 200;
@@ -61,9 +62,13 @@ function createTurndown(): TurndownService {
     },
   });
 
-  td.addRule("linkTextOnly", {
+  td.addRule("internalArticleLink", {
     filter: "a",
-    replacement: (content) => content,
+    replacement: (content, node) => {
+      const href = (node as HTMLElement).getAttribute("href");
+      const id = parseBlogPostId(href);
+      return id === null ? content : `[${content}](${BLOG_ORIGIN}/${id})`;
+    },
   });
 
   td.addRule("imageAlt", {

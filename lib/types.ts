@@ -31,7 +31,23 @@ export type BlogIndex = {
   chunks: Chunk[];
 };
 
+export type EvidenceRelation = {
+  kind: "link" | "series" | "concept";
+  fromChunkId: string;
+  toChunkId: string;
+  evidence: string;
+};
+
+/** Source numbers refer only to evidence included in this turn's context. */
+export type SourceRelation = {
+  kind: EvidenceRelation["kind"];
+  from: number;
+  to: number;
+  evidence: string;
+};
+
 export type SourceRef = {
+  chunkId?: string;
   n: number;
   postId: number;
   title: string;
@@ -41,6 +57,7 @@ export type SourceRef = {
 
 export type ChatMetadata = {
   sources?: SourceRef[];
+  relations?: SourceRelation[];
   model?: string;
   tier?: "primary" | "fallback";
 };

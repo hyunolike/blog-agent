@@ -79,7 +79,7 @@ describe("createSearcher", () => {
     expect(results.filter((r) => r.post.id === 1).length).toBeLessThanOrEqual(SEARCH.perPostCap);
   });
 
-  it("spreads results over several posts before giving one post more chunks", () => {
+  it("does not force four different posts into a simple search", () => {
     const wide: BlogIndex = {
       ...index,
       posts: [post(1), post(2), post(3), post(4)],
@@ -95,7 +95,7 @@ describe("createSearcher", () => {
       ],
     };
     const results = createSearcher(wide).search({ query: "", queryVector: [1, 0], currentPostId: null });
-    expect(new Set(results.map((r) => r.post.id))).toEqual(new Set([1, 2, 3, 4]));
+    expect(new Set(results.map((r) => r.post.id))).toEqual(new Set([1, 2]));
     expect(results[0]!.chunk.id).toBe("1-1");
     // 고른 뒤에는 다시 점수순으로 돌려놓는다
     const scores = results.map((r) => r.score);
@@ -126,23 +126,43 @@ describe("createSearcher", () => {
     }
   });
 
-  it("always includes the summary of the post being viewed", () => {
+  it("ignores an unrelated viewed post for a self-contained question", () => {
     const results = searcher.search({ query: "systemd", queryVector: [0, 1], currentPostId: 3 });
-    expect(results.some((r) => r.chunk.id === "3-0")).toBe(true);
-    expect(results.length).toBeLessThanOrEqual(SEARCH.finalCount + 1);
+    expect(results[0]!.post.id).toBe(1);
+    expect(results.some((r) => r.post.id === 3)).toBe(false);
   });
 
-  it("puts the viewed post's summary first, followed by its body, even for an unrelated query", () => {
-    const results = searcher.search({ query: "systemd", queryVector: [0, 1], currentPostId: 3 });
-    expect(results[0]!.chunk.id).toBe("3-0");
-    expect(results.some((r) => r.chunk.id === "3-1")).toBe(true);
-    expect(results.length).toBeLessThanOrEqual(SEARCH.finalCount + 1);
+  it("does not read the end of 차이 글 as the demonstrative 이 글", () => {
+    const results = searcher.search({ query: "systemd timer와 cron의 차이 글을 찾아줘", queryVector: null, currentPostId: 3 });
+    expect(results.some((r) => r.post.id === 3)).toBe(false);
+    expect(results[0]!.post.id).toBe(1);
   });
 
-  it("falls back to the viewed post's first body chunks when none of them ranked", () => {
-    const results = searcher.search({ query: "systemd", queryVector: null, currentPostId: 3 });
+  it("anchors explicit this-post questions with its summary and body", () => {
+    const results = searcher.search({ query: "이 글 3줄 요약해줘", queryVector: null, currentPostId: 3 });
     expect(results.map((r) => r.chunk.id).slice(0, 2)).toEqual(["3-0", "3-1"]);
-    expect(results.slice(2).every((r) => r.post.id === 1)).toBe(true);
+    expect(results.every((r) => r.post.id === 3)).toBe(true);
+  });
+
+  it("keeps a viewed-post follow-up scoped to the explicitly referenced article", () => {
+    const results = searcher.search({ query: "그거 더 자세히\n이 글 3줄 요약해줘", queryVector: null, currentPostId: 3 });
+    expect(results.map((r) => r.chunk.id)).toEqual(["3-0", "3-1"]);
+  });
+
+  it("supports a standalone summary request on a viewed post", () => {
+    const results = searcher.search({ query: "요약해줘", queryVector: null, currentPostId: 3 });
+    expect(results.map((r) => r.chunk.id).slice(0, 2)).toEqual(["3-0", "3-1"]);
+  });
+
+  it("does not pad exact-term results with unrelated positive vector matches", () => {
+    const results = searcher.search({ query: "RequiresMountsFor는 어디에 썼어?", queryVector: [1, 0], currentPostId: null });
+    expect(results.map((r) => r.chunk.id)).toEqual(["1-1"]);
+  });
+
+  it("does not use nonfinite or nonpositive vector matches as evidence", () => {
+    expect(searcher.search({ query: "!!!", queryVector: [-1, 0], currentPostId: null })).toEqual([]);
+    expect(searcher.search({ query: "!!!", queryVector: [NaN, 0], currentPostId: null })).toEqual([]);
+    expect(searcher.search({ query: "!!!", queryVector: [0, 0], currentPostId: null })).toEqual([]);
   });
 
   it("ignores a viewed post id that is not in the index", () => {
