@@ -1,8 +1,9 @@
 import { decodeVector } from "./vector";
 import { tokenize } from "./tokenize";
+import { isComparisonQuery, isCurrentPostQuery, queryConcepts, searchTerms } from "./query";
 import type { BlogIndex, Chunk, Post } from "./types";
 
-export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3, minPosts: 4, listCount: 8 };
+export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3, listCount: 8 };
 
 // "보여줘", "정리해줘", "어떤 작업들", "경험" 같은 표현은 글 하나보다 여러 글을 원하는 질문이다
 const LISTING = /보여\s?줘|목록|전부|전체|모두|정리해|뭐뭐|어떤\s?\S*들|경험/;
@@ -33,7 +34,14 @@ function normalize(v: ArrayLike<number>): Float32Array {
 export function createSearcher(index: BlogIndex): Searcher {
   const postById = new Map(index.posts.map((p) => [p.id, p]));
   const chunks = index.chunks.filter((c) => postById.has(c.postId));
-  const vectors = chunks.map((c) => normalize(decodeVector(c.vector)));
+  const vectors = chunks.map((c) => {
+    try {
+      const v = decodeVector(c.vector);
+      return v.length === index.dimensions && [...v].every(Number.isFinite) ? normalize(v) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const termFreqs = chunks.map((c) => {
     const tf = new Map<string, number>();
@@ -46,7 +54,7 @@ export function createSearcher(index: BlogIndex): Searcher {
   for (const tf of termFreqs) for (const t of tf.keys()) docFreq.set(t, (docFreq.get(t) ?? 0) + 1);
 
   function bm25Ranking(query: string): number[] {
-    const terms = [...new Set(tokenize(query))];
+    const terms = searchTerms(query);
     if (terms.length === 0) return [];
     const scores = termFreqs.map((tf, i) => {
       let s = 0;
@@ -63,20 +71,21 @@ export function createSearcher(index: BlogIndex): Searcher {
   }
 
   function vectorRanking(queryVector: ArrayLike<number> | null): number[] {
-    if (!queryVector || queryVector.length !== index.dimensions) return [];
+    if (!queryVector || queryVector.length !== index.dimensions || !Array.from(queryVector).every(Number.isFinite)) return [];
     const q = normalize(queryVector);
     const scores = vectors.map((v) => {
+      if (!v) return 0;
       let dot = 0;
       for (let i = 0; i < v.length; i++) dot += v[i]! * q[i]!;
       return dot;
     });
-    return rank(scores, -Infinity);
+    return rank(scores);
   }
 
   function rank(scores: number[], floor = 0): number[] {
     return scores
       .map((s, i) => [s, i] as const)
-      .filter(([s]) => s > floor)
+      .filter(([s]) => Number.isFinite(s) && s > floor)
       .sort((a, b) => b[0] - a[0])
       .slice(0, SEARCH.candidates)
       .map(([, i]) => i);
@@ -89,10 +98,15 @@ export function createSearcher(index: BlogIndex): Searcher {
         ranking.forEach((chunkIdx, r) => fused.set(chunkIdx, (fused.get(chunkIdx) ?? 0) + 1 / (SEARCH.rrfK + r + 1)));
       }
 
-      const ranked = [...fused].sort((a, b) => b[1] - a[1]);
+      // An exact indexed technical term is a stronger eligibility signal than a
+      // weak positive vector match or a conversational Hangul bigram.
+      const anchors = queryConcepts(query).filter((t) => docFreq.has(t));
+      const ranked = [...fused]
+        .filter(([i]) => anchors.length === 0 || anchors.some((t) => termFreqs[i]!.has(t)))
+        .sort((a, b) => b[1] - a[1]);
       const picked: RetrievedChunk[] = [];
       const take = (i: number, score: number) => picked.push({ chunk: chunks[i]!, post: postById.get(chunks[i]!.postId)!, score });
-      const current = currentPostId !== null && postById.has(currentPostId) ? currentPostId : null;
+      const current = isCurrentPostQuery(query) && currentPostId !== null && postById.has(currentPostId) ? currentPostId : null;
       // 목록형 질문은 칸을 늘리고 글마다 한 조각씩만 담아 더 많은 글을 보여준다
       const listing = isListingQuery(query);
       let limit = listing ? SEARCH.listCount : SEARCH.finalCount;
@@ -116,8 +130,8 @@ export function createSearcher(index: BlogIndex): Searcher {
         for (const [i, score] of body) take(i, score);
       }
 
-      // 다른 글: 먼저 서로 다른 글 minPosts개의 최고 조각을 고르고, 남은 칸은 순위대로 글당 perPostCap까지 채운다.
-      // "Redis를 어디에 써봤어?" 같은 넓은 질문에서 한 글이 칸을 독차지하지 않게 한다.
+      // Diversity is useful for lists/comparisons, not a reason to pad a simple
+      // question with unrelated articles. Eligibility was checked before this step.
       const others = ranked.filter(([i]) => chunks[i]!.postId !== current);
       const slots = limit - picked.length;
       const chosen = new Set<number>();
@@ -132,7 +146,7 @@ export function createSearcher(index: BlogIndex): Searcher {
           chosen.add(i);
         }
       };
-      fill(1, listing ? slots : Math.min(SEARCH.minPosts, slots));
+      if (listing || isComparisonQuery(query)) fill(1, listing ? slots : Math.min(4, slots));
       fill(SEARCH.perPostCap, slots);
       for (const [i, score] of others) if (chosen.has(i)) take(i, score);
       return picked;

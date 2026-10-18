@@ -179,6 +179,21 @@ describe("handleChat", () => {
     expect(prompts[0]).toContain("사용자가 지금 보고 있는 글: [1] 점검 페이지");
   });
 
+  it("does not label an incidental current-post match as the question's subject", async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      modelId: "test/model",
+      doStream: async (options) => {
+        prompts.push(JSON.stringify(options.prompt));
+        return okModel("답").doStream(options);
+      },
+    });
+    const res = await handleChat(request(ask("Edge Config는 어디에 썼어?", { from: "https://hyunolike.tistory.com/70" })),
+      deps({ createModel: () => model }));
+    await sse(res);
+    expect(prompts[0]).not.toContain("사용자가 지금 보고 있는 글");
+  });
+
   it("logs an interrupted outcome when the model fails after streaming some text", async () => {
     const log = vi.fn();
     const breaking = new MockLanguageModelV4({

@@ -1,5 +1,6 @@
 import type { RetrievedChunk } from "./retrieval";
 import type { SourceRef } from "./types";
+import { isFollowUpQuery } from "./query";
 
 export const PROMPT_BUDGET = { sourceChars: 9000, historyChars: 3000 };
 
@@ -16,44 +17,44 @@ export const SYSTEM_PROMPT = `너는 hyunolike 기술 블로그(https://hyunolik
 
 export type TextMessage = { role: "user" | "assistant"; text: string };
 
-const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const escapeText = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escapeAttr = (s: string) => escapeText(s).replace(/"/g, "&quot;");
 
 export function buildSearchQuery(messages: TextMessage[]): string {
   const users = messages.filter((m) => m.role === "user").map((m) => m.text);
-  return users.slice(-2).reverse().join("\n");
+  const current = users.at(-1) ?? "";
+  return isFollowUpQuery(current) ? users.slice(-2).reverse().join("\n") : current;
 }
 
 export function buildSources(results: RetrievedChunk[]): { block: string; sources: SourceRef[] } {
   const sources: SourceRef[] = [];
   const parts: string[] = [];
+  // Give each article its first turn before spending space on extra snippets.
+  const seen = new Set<number>();
+  const first = results.filter(({ post }) => !seen.has(post.id) && !!seen.add(post.id));
+  const rest = results.filter((r) => !first.includes(r));
+  const unique = new Set<string>();
   let used = 0;
-  for (const { chunk, post } of results) {
-    const remaining = PROMPT_BUDGET.sourceChars - used;
-
-    // If adding this chunk would exceed budget
-    if (chunk.text.length > remaining) {
-      // If we already have sources, stop without adding this one
-      if (sources.length > 0) break;
-      // Otherwise, truncate this first source and add it
-      const n = sources.length + 1;
-      const section = chunk.headingPath.join(" > ");
-      const truncatedText = chunk.text.slice(0, remaining) + "\n…(이하 생략)";
-      sources.push({ n, postId: post.id, title: post.title, url: post.url, section });
-      parts.push(
-        `<source id="${n}" title="${escapeAttr(post.title)}" section="${escapeAttr(section)}" url="${post.url}">\n${truncatedText}\n</source>`,
-      );
-      used = PROMPT_BUDGET.sourceChars;
-      break; // Stop after the first truncated source
-    }
-
-    // Normal case: chunk fits in remaining budget
+  for (const { chunk, post } of [...first, ...rest]) {
+    if (unique.has(chunk.id) || !chunk.text.trim()) continue;
     const n = sources.length + 1;
     const section = chunk.headingPath.join(" > ");
+    const header = `<source id="${n}" title="${escapeAttr(post.title)}" section="${escapeAttr(section)}" url="${escapeAttr(post.url)}">\n`;
+    const footer = "\n</source>";
+    const separator = parts.length ? 2 : 0;
+    const remaining = PROMPT_BUDGET.sourceChars - used - header.length - footer.length - separator;
+    // A single source may use the full budget; with several, no long snippet
+    // monopolizes the context. Count the escaped text and truncation marker too.
+    const allowance = Math.min(remaining, results.length === 1 ? remaining : 2400);
+    if (allowance < 80) continue;
+    const text = escapeText(chunk.text);
+    const marker = "\n…(이하 생략)";
+    const excerpt = text.length <= allowance ? text : text.slice(0, allowance - marker.length) + marker;
+    const part = header + excerpt + footer;
+    parts.push(part);
     sources.push({ n, postId: post.id, title: post.title, url: post.url, section });
-    parts.push(
-      `<source id="${n}" title="${escapeAttr(post.title)}" section="${escapeAttr(section)}" url="${post.url}">\n${chunk.text}\n</source>`,
-    );
-    used += chunk.text.length;
+    used += part.length + separator;
+    unique.add(chunk.id);
   }
   return { block: parts.join("\n\n"), sources };
 }
