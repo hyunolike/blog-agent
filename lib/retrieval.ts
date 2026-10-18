@@ -1,7 +1,8 @@
 import { decodeVector } from "./vector";
 import { tokenize } from "./tokenize";
 import { isComparisonQuery, isCurrentPostQuery, queryConcepts, searchTerms } from "./query";
-import type { BlogIndex, Chunk, Post } from "./types";
+import type { BlogIndex, Chunk, EvidenceRelation, Post } from "./types";
+import { createRelationExpander } from "./relations";
 
 export const SEARCH = { candidates: 30, rrfK: 60, finalCount: 6, perPostCap: 3, listCount: 8 };
 
@@ -13,7 +14,7 @@ export function isListingQuery(query: string): boolean {
   return LISTING.test(query.split("\n")[0] ?? "");
 }
 
-export type RetrievedChunk = { chunk: Chunk; post: Post; score: number };
+export type RetrievedChunk = { chunk: Chunk; post: Post; score: number; relations?: EvidenceRelation[] };
 export type SearchInput = { query: string; queryVector: ArrayLike<number> | null; currentPostId: number | null };
 export type Searcher = { search(input: SearchInput): RetrievedChunk[] };
 
@@ -32,6 +33,7 @@ function normalize(v: ArrayLike<number>): Float32Array {
 }
 
 export function createSearcher(index: BlogIndex): Searcher {
+  const expandRelations = createRelationExpander(index);
   const postById = new Map(index.posts.map((p) => [p.id, p]));
   const chunks = index.chunks.filter((c) => postById.has(c.postId));
   const vectors = chunks.map((c) => {
@@ -149,7 +151,7 @@ export function createSearcher(index: BlogIndex): Searcher {
       if (listing || isComparisonQuery(query)) fill(1, listing ? slots : Math.min(4, slots));
       fill(SEARCH.perPostCap, slots);
       for (const [i, score] of others) if (chosen.has(i)) take(i, score);
-      return picked;
+      return expandRelations(query, picked, ranked.map(([i, score]) => ({ chunk: chunks[i]!, post: postById.get(chunks[i]!.postId)!, score })));
     },
   };
 }

@@ -34,14 +34,21 @@ describe("buildSearchQuery", () => {
     ])).toBe("Redis 캐시는 어떻게 적용했어?");
   });
 
+  it("does not mistake a Korean topic introduced by then for a deictic follow-up", () => {
+    expect(buildSearchQuery([
+      { role: "user", text: "CSS 화면 전환은 어떻게 해?" },
+      { role: "user", text: "그럼 낙관적 락은 어떻게 써?" },
+    ])).toBe("그럼 낙관적 락은 어떻게 써?");
+  });
+
 });
 
 describe("buildSources", () => {
   it("numbers sources and escapes attribute quotes", () => {
     const { block, sources } = buildSources([hit(70, 1, "본문 A", ['"따옴표" 절']), hit(65, 2, "본문 B")]);
     expect(sources).toEqual([
-      { n: 1, postId: 70, title: "글 70", url: "https://hyunolike.tistory.com/70", section: '"따옴표" 절' },
-      { n: 2, postId: 65, title: "글 65", url: "https://hyunolike.tistory.com/65", section: "절" },
+      { n: 1, chunkId: "70-1", postId: 70, title: "글 70", url: "https://hyunolike.tistory.com/70", section: '"따옴표" 절' },
+      { n: 2, chunkId: "65-2", postId: 65, title: "글 65", url: "https://hyunolike.tistory.com/65", section: "절" },
     ]);
     expect(block).toContain('<source id="1" title="글 70" section="&quot;따옴표&quot; 절" url="https://hyunolike.tistory.com/70">\n본문 A\n</source>');
   });

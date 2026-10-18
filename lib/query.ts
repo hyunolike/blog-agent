@@ -13,11 +13,15 @@ export function searchTerms(query: string): string[] {
 
 /** Exact technical names, not Hangul bigram overlaps or embedding similarity. */
 export function queryConcepts(query: string): string[] {
-  return searchTerms(query).filter((t) => /^[a-z][a-z0-9_.-]{2,}$/.test(t) && !GENERIC.has(t));
+  const terms = searchTerms(query);
+  return terms.filter((t) => /^[a-z][a-z0-9_.-]{2,}$/.test(t) && !GENERIC.has(t) &&
+    // ORA-28040 is an entity; its tokenizer fragment ORA is not a new entity.
+    !terms.some((whole) => whole !== t && /[_.-]/.test(whole) && whole.split(/[_.-]+/).includes(t)));
+
 }
 
 export function isComparisonQuery(query: string): boolean {
-  return /비교|차이|공통|연관|관계|연결|여러\s*글|다른\s*글/.test(query.split("\n")[0] ?? "");
+  return /비교|차이|공통(?:점|된)|연관(?:성|된|관계)|관계(?:를|가|는|에|도|[?.!\s]|$)|연결된\s*글|여러\s*글|다른\s*글/.test(query.split("\n")[0] ?? "");
 }
 
 export function isCurrentPostQuery(query: string): boolean {
@@ -26,5 +30,5 @@ export function isCurrentPostQuery(query: string): boolean {
 }
 
 export function isFollowUpQuery(query: string): boolean {
-  return /^(?:그거|그것|그건|그럼|그\s*방식|그\s*방법|이어서|더\s*자세|좀\s*더|장단점은|단점은|장점은)/.test(query.trim()) && queryConcepts(query).length === 0;
+  return /^(?:그럼\s*)?(?:그거|그것|그건|그\s*방식|그\s*방법|이어서|더\s*자세|좀\s*더|장단점은|단점은|장점은)/.test(query.trim()) && queryConcepts(query).length === 0;
 }

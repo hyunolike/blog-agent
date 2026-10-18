@@ -96,7 +96,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
 
   const currentPostId = parseBlogPostId(parsed.from);
   const results = deps.searcher.search({ query, queryVector, currentPostId });
-  const { block, sources } = buildSources(results);
+  const { block, sources, relations } = buildSources(results);
   // A viewing hint is authoritative only when the user actually refers to that post.
   const currentTitle = isCurrentPostQuery(question.text) && currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
 
@@ -109,7 +109,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
 
   const stream = createUIMessageStream<ChatUIMessage>({
     execute: ({ writer }) => {
-      writer.write({ type: "start", messageMetadata: { sources } satisfies ChatMetadata });
+      writer.write({ type: "start", messageMetadata: { sources, relations } satisfies ChatMetadata });
       const result = streamText({
         model,
         instructions: SYSTEM_PROMPT,
@@ -149,6 +149,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
               totalMs: Date.now() - startedAt,
               usage: part.totalUsage,
               postIds,
+              relationCount: relations.length,
               questionChars,
               embedFailed,
             });

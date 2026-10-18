@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import TurndownService from "turndown";
+import { BLOG_ORIGIN, parseBlogPostId } from "@/lib/config";
 import type { Post } from "@/lib/types";
 
 export const MIN_BODY_CHARS = 200;
@@ -32,7 +33,11 @@ function createTurndown(): TurndownService {
       (node.nodeName === "STRONG" || node.nodeName === "B" || node.nodeName === "EM" || node.nodeName === "I") &&
       !!node.parentNode &&
       /^H[1-6]$/.test(node.parentNode.nodeName),
-    replacement: (content) => content,
+    replacement: (content, node) => {
+      const href = (node as HTMLElement).getAttribute("href");
+      const id = parseBlogPostId(href);
+      return id === null ? content : `[${content}](${BLOG_ORIGIN}/${id})`;
+    },
   });
 
   td.addRule("tistoryCode", {
@@ -63,7 +68,11 @@ function createTurndown(): TurndownService {
 
   td.addRule("linkTextOnly", {
     filter: "a",
-    replacement: (content) => content,
+    replacement: (content, node) => {
+      const href = (node as HTMLElement).getAttribute("href");
+      const id = parseBlogPostId(href);
+      return id === null ? content : `[${content}](${BLOG_ORIGIN}/${id})`;
+    },
   });
 
   td.addRule("imageAlt", {
