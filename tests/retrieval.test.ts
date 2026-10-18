@@ -132,6 +132,12 @@ describe("createSearcher", () => {
     expect(results.some((r) => r.post.id === 3)).toBe(false);
   });
 
+  it("does not read the end of 차이 글 as the demonstrative 이 글", () => {
+    const results = searcher.search({ query: "systemd timer와 cron의 차이 글을 찾아줘", queryVector: null, currentPostId: 3 });
+    expect(results.some((r) => r.post.id === 3)).toBe(false);
+    expect(results[0]!.post.id).toBe(1);
+  });
+
   it("anchors explicit this-post questions with its summary and body", () => {
     const results = searcher.search({ query: "이 글 3줄 요약해줘", queryVector: null, currentPostId: 3 });
     expect(results.map((r) => r.chunk.id).slice(0, 2)).toEqual(["3-0", "3-1"]);

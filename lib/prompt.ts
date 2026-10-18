@@ -1,5 +1,6 @@
 import type { RetrievedChunk } from "./retrieval";
 import type { SourceRef, SourceRelation } from "./types";
+import { conceptOffset, originalChunkText } from "./evidence";
 import { isFollowUpQuery } from "./query";
 
 export const PROMPT_BUDGET = { sourceChars: 9000, historyChars: 3000 };
@@ -62,7 +63,11 @@ export function buildSources(results: RetrievedChunk[]): { block: string; source
     let excerpt = text;
     if (text.length > allowance) {
       const witness = evidence.find((e) => e.kind !== "series" && (e.fromChunkId === chunk.id || (e.kind === "concept" && e.toChunkId === chunk.id)));
-      const offset = witness ? text.toLowerCase().indexOf(escapeText(witness.evidence).toLowerCase()) : -1;
+      const original = originalChunkText(chunk.text);
+      const skip = escapeText(chunk.text.slice(0, chunk.text.length - original.length)).length;
+      const offset = !witness ? -1 : witness.kind === "concept"
+        ? conceptOffset(text, witness.evidence, skip)
+        : text.toLowerCase().indexOf(escapeText(witness.evidence).toLowerCase(), skip);
       const prefix = offset > allowance / 2 ? "…(앞부분 생략)\n" : "";
       const start = prefix ? Math.max(0, offset - Math.floor(allowance / 3)) : 0;
       excerpt = prefix + text.slice(start, start + allowance - prefix.length - marker.length) + marker;
@@ -72,7 +77,7 @@ export function buildSources(results: RetrievedChunk[]): { block: string; source
     sources.push({ n, chunkId: chunk.id, postId: post.id, title: post.title, url: post.url, section });
     used += part.length + separator;
     unique.add(chunk.id);
-    visible.set(chunk.id, excerpt.toLowerCase());
+    visible.set(chunk.id, originalChunkText(excerpt).toLowerCase());
   }
   const relations: SourceRelation[] = [];
   for (const edge of evidence) {
@@ -81,7 +86,8 @@ export function buildSources(results: RetrievedChunk[]): { block: string; source
     if (!from || !to) continue;
     const witness = escapeText(edge.evidence).toLowerCase();
     if (edge.kind === "link" && !visible.get(edge.fromChunkId)?.includes(witness)) continue;
-    if (edge.kind === "concept" && (!visible.get(edge.fromChunkId)?.includes(witness) || !visible.get(edge.toChunkId)?.includes(witness))) continue;
+    if (edge.kind === "concept" && (conceptOffset(visible.get(edge.fromChunkId) ?? "", edge.evidence) < 0 ||
+      conceptOffset(visible.get(edge.toChunkId) ?? "", edge.evidence) < 0)) continue;
     const part = `<relation kind="${edge.kind}" from="${from.n}" to="${to.n}">\n${escapeText(edge.evidence)}\n</relation>`;
     if (used + part.length + 2 > PROMPT_BUDGET.sourceChars) continue;
     parts.push(part);

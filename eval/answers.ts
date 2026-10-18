@@ -7,7 +7,7 @@ import { buildModelMessages, buildSources, SYSTEM_PROMPT } from "@/lib/prompt";
 import { createSearcher } from "@/lib/retrieval";
 import type { BlogIndex, SourceRef, SourceRelation } from "@/lib/types";
 import { loadQuestions } from "./load";
-import { assessQuality } from "./quality";
+import { assessQuality, answerFingerprint } from "./quality";
 
 const REFUSAL = /블로그에는 없는 내용|블로그에 없는|찾을 수 없/;
 
@@ -86,6 +86,7 @@ async function main() {
       const quality = assessQuality({ requiredPostIds, answer: text, sources });
       rows.push({ model, id: q.id, type: q.type, question: q.question, citationHeuristicPass, quality, requiredPostIds,
         expectedPostIds: q.expectedPostIds, sources, relations, sourceBlock: block,
+        answerHash: answerFingerprint({ question: q.question, text, sourceBlock: block, sources }),
         citedPosts, firstTextMs, ms: Date.now() - started, error, text });
       if (firstTextMs !== null) firstTextTimes.push(firstTextMs);
       console.log(`${citationHeuristicPass ? "✓" : "✗"} ${model} ${q.id} ${error ?? ""}`);

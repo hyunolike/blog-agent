@@ -41,6 +41,10 @@ describe("buildSearchQuery", () => {
     ])).toBe("그럼 낙관적 락은 어떻게 써?");
   });
 
+  it.each(["그거 말고 낙관적 락은 어떻게 썼어?", "그건 됐고 낙관적 락은 어떻게 썼어?"])("does not inherit an explicitly cancelled topic: %s", (text) => {
+    expect(buildSearchQuery([{ role: "user", text: "systemd timer 왜 썼어?" }, { role: "user", text }])).toBe(text);
+  });
+
 });
 
 describe("buildSources", () => {

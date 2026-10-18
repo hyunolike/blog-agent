@@ -1,6 +1,6 @@
 # Grounded Answers Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Reduce reproducible retrieval/context risks and support bounded, cited comparisons without claiming measured answer accuracy.
 **Architecture:** Keep BM25/vector RRF and the v1 JSON index. Gate contextual search and one-hop relation expansion by query intent; serialize bounded evidence with provenance.
@@ -28,25 +28,26 @@
 **Files:** lib/retrieval.ts, lib/prompt.ts, lib/chat-handler.ts; tests/retrieval.test.ts, tests/prompt.test.ts, tests/chat-handler.test.ts.
 **Interfaces:** Preserve Searcher.search(SearchInput), buildSearchQuery and buildSources; add chunk provenance to SourceRef.
 
-- [ ] Write regressions for topic switch, explicit/implicit current-post requests, weak/nonfinite vectors, exact technical terms, and long-source starvation/escaping/budget.
-- [ ] Run tests to observe the expected failures, then implement query gating, relevance filters and bounded source selection.
-- [ ] Run `npm test` (all pass), record results, commit.
+- [x] Write regressions for topic switch, explicit/implicit current-post requests, weak/nonfinite vectors, exact technical terms, and long-source starvation/escaping/budget.
+- [x] Run tests to observe the expected failures, then implement query gating, relevance filters and bounded source selection.
+- [x] Run `npm test` (all pass), record results, commit.
 
 ### Task 2: One-hop evidence relations
 
 **Files:** lib/relations.ts, lib/types.ts, lib/retrieval.ts, lib/prompt.ts, ingest/extract.ts; tests/relations.test.ts, tests/extract.test.ts, tests/chat-handler.test.ts.
 **Interfaces:** EvidenceRelation refers to fromChunkId/toChunkId and kind link/series/concept. RetrievedChunk carries optional relation provenance; buildSources returns source-numbered relations as well as sources/block.
 
-- [ ] Write regressions for link/series/concept witnesses, wrong hosts, generic words, cycle bounds, simple queries bypassing expansion and relation endpoints surviving serialization.
-- [ ] Observe failing tests, implement capped one-hop expansion and internal-link preservation without rewriting the index.
-- [ ] Run `npm test` (all pass), record results, commit.
+- [x] Write regressions for link/series/concept witnesses, wrong hosts, generic words, cycle bounds, simple queries bypassing expansion and relation endpoints surviving serialization.
+- [x] Observe failing tests, implement capped one-hop expansion and internal-link preservation without rewriting the index.
+- [x] Run `npm test` (all pass), record results, commit.
 
 ### Task 3: Separated evaluation and delivery
 
 **Files:** eval/grounding.ts, eval/quality.ts, eval/answers.ts, eval/review.ts, eval/grounding-cases.json; tests/quality.test.ts; package.json, README.md, docs/answer-quality.md; branch-only vercel.json and PR validation workflow.
 **Interfaces:** assessQuality reports missing required posts/invalid citations mechanically; human judgments independently supply correctness/citation support/unsupported relation claim count, otherwise null.
 
-- [ ] Write failing evaluation tests with valid-but-wrong citations, missing required posts and unsupported relationship judgments.
-- [ ] Implement offline grounding scenarios and optional human review scoring. Save source evidence alongside generated answer evaluations.
-- [ ] Run full tests, offline retrieval/grounding evaluations, typecheck, build, actionlint and diff check. No model API calls.
-- [ ] Fresh reviewer checks the whole branch; resolve important findings with regression tests. Create Draft PR and report actual CI separately. Preserve existing branch/PR and do not merge/deploy.
+- [x] Write failing evaluation tests with valid-but-wrong citations, missing required posts and unsupported relationship judgments.
+- [x] Implement offline grounding scenarios and optional human review scoring. Save source evidence alongside generated answer evaluations.
+- [x] Run full tests, offline retrieval/grounding evaluations, typecheck, build, actionlint and diff check. No model API calls.
+- [x] Fresh reviewer checks the whole branch; resolve important findings with regression tests.
+- [ ] Create Draft PR and report actual CI separately. Preserve existing branch/PR and do not merge/deploy.

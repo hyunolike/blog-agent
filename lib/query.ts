@@ -26,11 +26,21 @@ export function isComparisonQuery(query: string): boolean {
 
 export function isCurrentPostQuery(query: string): boolean {
   const current = query.split("\n")[0]?.trim() ?? "";
-  return /이\s*글|현재\s*글|보고\s*있는\s*글|이\s*포스트/.test(current) ||
+  return /(?:^|[\s“”"'()])(?:이\s*글|현재\s*글|보고\s*있는\s*글|이\s*포스트)(?=[이가을를의에은는도과와로부터?!.,\s]|$)/.test(current) ||
     /^(?:\d+\s*줄\s*)?요약(?:해\s*줘|해|해줘요|해\s*주세요)?[.!?\s]*$/.test(current) ||
     (isFollowUpQuery(current) && !!query.split("\n")[1] && isCurrentPostQuery(query.split("\n").slice(1).join("\n")));
 }
 
 export function isFollowUpQuery(query: string): boolean {
-  return /^(?:그럼\s*)?(?:그거|그것|그건|그\s*방식|그\s*방법|이어서|더\s*자세|좀\s*더|장단점은|단점은|장점은)/.test(query.trim()) && queryConcepts(query).length === 0;
+  if (queryConcepts(query).length) return false;
+  let text = query.trim().replace(/[.!?…]+$/g, "").replace(/^그럼\s*/, "").trim();
+  const deictic = text.match(/^(?:그거|그것|그건|그\s*방식|그\s*방법)(?:은|는|을|의|에\s*대해)?\s*(.*)$/);
+  if (deictic) {
+    text = deictic[1]!.trim();
+    if (!text) return true;
+  }
+  // Whole-phrase recognition fails closed on new Korean nouns, cancellation
+  // clauses ("그거 말고 ..."), or other self-contained topic changes.
+  text = text.replace(/\s*(?:알려\s*줘|설명해\s*줘|말해\s*줘|보여\s*줘|알려\s*주세요|설명해\s*주세요)$/, "").trim();
+  return /^(?:(?:좀|조금)\s*)?(?:더\s*)?(?:자세히|설명|장단점(?:은|을)?|장점(?:은|을)?|단점(?:은|을)?|예시(?:는|를|도)?|이유(?:는|를)?|왜|어떻게|이어서)$/.test(text);
 }

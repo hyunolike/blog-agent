@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { SourceRef } from "@/lib/types";
 
 /** Human judgments refer to the saved answer AND its exact source block. */
@@ -29,4 +30,11 @@ export function assessQuality(
     citationSupport: review?.citationSupport ?? null,
     unsupportedRelationClaims: review?.unsupportedRelationClaims ?? null,
   };
+}
+
+/** Stable across object-property order, but bound to exact question, answer and evidence. */
+export function answerFingerprint(input: { question: string; text: string; sourceBlock: string; sources: SourceRef[] }): string {
+  const canonical = [input.question, input.text, input.sourceBlock,
+    [...input.sources].sort((a, b) => a.n - b.n).map((s) => [s.n, s.chunkId ?? null, s.postId, s.title, s.url, s.section])];
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }

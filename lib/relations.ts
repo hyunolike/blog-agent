@@ -1,6 +1,6 @@
 import { parseBlogPostId } from "./config";
 import { isComparisonQuery, queryConcepts } from "./query";
-import { tokenize } from "./tokenize";
+import { conceptOffset, originalChunkText } from "./evidence";
 import type { RetrievedChunk } from "./retrieval";
 import type { BlogIndex, Chunk, EvidenceRelation } from "./types";
 
@@ -16,16 +16,16 @@ export function createRelationExpander(index: BlogIndex) {
   const posts = new Map(index.posts.map((p) => [p.id, p]));
   const chunks = index.chunks.filter((c) => posts.has(c.postId));
   const byPost = new Map<number, Chunk[]>();
-  const words = new Map<string, Set<string>>();
+  const originals = new Map<string, string>();
   for (const chunk of chunks) {
     byPost.set(chunk.postId, [...(byPost.get(chunk.postId) ?? []), chunk]);
-    words.set(chunk.id, new Set(tokenize(`${chunk.headingPath.join(" ")} ${chunk.text}`)));
+    originals.set(chunk.id, `${chunk.headingPath.join(" ")}\n${originalChunkText(chunk.text)}`);
   }
   const links: { from: Chunk; toPostId: number; evidence: string }[] = [];
   const seenLinks = new Set<string>();
   // Prefer original body evidence over a summary that repeats the same link.
   for (const chunk of [...chunks].sort((a, b) => Number(a.kind === "summary") - Number(b.kind === "summary"))) {
-    for (const match of chunk.text.matchAll(/https?:\/\/[^\s<>)\]"']+/g)) {
+    for (const match of originalChunkText(chunk.text).matchAll(/https?:\/\/[^\s<>)\]"']+/g)) {
       const url = match[0].replace(/[.,;!?]+$/, "");
       const target = parseBlogPostId(url);
       const key = `${chunk.postId}:${target}`;
@@ -45,7 +45,7 @@ export function createRelationExpander(index: BlogIndex) {
     let count = 0;
 
     const best = (postId: number, term?: string): Chunk | undefined => {
-      const candidates = (byPost.get(postId) ?? []).filter((c) => !term || words.get(c.id)!.has(term));
+      const candidates = (byPost.get(postId) ?? []).filter((c) => !term || conceptOffset(originals.get(c.id)!, term) >= 0);
       return candidates.sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || Number(a.kind === "summary") - Number(b.kind === "summary"))[0];
     };
     const add = (kind: EvidenceRelation["kind"], from: Chunk, to: Chunk | undefined, evidence: string) => {

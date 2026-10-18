@@ -66,6 +66,19 @@ describe("bounded evidence expansion", () => {
     expect(edges(r)).toEqual([]);
   });
 
+  it("does not treat injected project membership as original concept evidence", () => {
+    const r = search(corpus(["프로젝트: DND 동아리 프로젝트\n지리 알고리즘 원문", "프로젝트: DND 동아리 프로젝트\n인프라 비용 원문"]), "DND 동아리 글 비교해줘");
+    expect(r).toHaveLength(2); // Enrichment remains useful for ordinary retrieval.
+    expect(edges(r)).toEqual([]);
+  });
+
+  it("clips around the exact concept instead of a preceding substring", () => {
+    const r = search(corpus(["redistribution ".repeat(250) + " Redis cache is used.", "Redis lock is used."]), "Redis 비교");
+    const out = buildSources(r);
+    expect(out.block).toContain("Redis cache is used.");
+    expect(out.relations).toHaveLength(1);
+  });
+
   it("does not use generic API co-occurrence as a concept edge", () => {
     expect(edges(search(corpus(["API 설계", "API 운영"]), "API 비교"))).toEqual([]);
   });
