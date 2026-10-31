@@ -6,6 +6,7 @@ import type { ModelUsed } from "./fallback-model";
 import { checkLimits, type Limiters } from "./limits";
 import { buildModelMessages, buildSearchQuery, buildSources, SYSTEM_PROMPT, type TextMessage } from "./prompt";
 import type { Searcher } from "./retrieval";
+import { isCurrentPostQuery } from "./query";
 import type { ChatMetadata, ChatUIMessage } from "./types";
 
 export type ChatDeps = {
@@ -95,9 +96,9 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
 
   const currentPostId = parseBlogPostId(parsed.from);
   const results = deps.searcher.search({ query, queryVector, currentPostId });
-  const { block, sources } = buildSources(results);
-  // 보고 있는 글이 있으면 검색이 그 글 요약을 맨 앞에 두므로 출처 1번이 된다
-  const currentTitle = currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
+  const { block, sources, relations } = buildSources(results);
+  // A viewing hint is authoritative only when the user actually refers to that post.
+  const currentTitle = isCurrentPostQuery(query) && currentPostId !== null && sources[0]?.postId === currentPostId ? sources[0].title : undefined;
 
   let used: ModelUsed | undefined;
   let firstTextAt: number | undefined;
@@ -108,7 +109,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
 
   const stream = createUIMessageStream<ChatUIMessage>({
     execute: ({ writer }) => {
-      writer.write({ type: "start", messageMetadata: { sources } satisfies ChatMetadata });
+      writer.write({ type: "start", messageMetadata: { sources, relations } satisfies ChatMetadata });
       const result = streamText({
         model,
         instructions: SYSTEM_PROMPT,
@@ -148,6 +149,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
               totalMs: Date.now() - startedAt,
               usage: part.totalUsage,
               postIds,
+              relationCount: relations.length,
               questionChars,
               embedFailed,
             });
