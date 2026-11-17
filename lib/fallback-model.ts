@@ -112,7 +112,7 @@ function warnFlagError(err: unknown): void {
 async function safeSkipPrimary(skipPrimary?: () => Promise<boolean>): Promise<boolean> {
   if (!skipPrimary) return false;
   try {
-    return await skipPrimary();
+    return await withFlagTimeout(skipPrimary());
   } catch (err) {
     warnFlagError(err);
     return false;
@@ -126,9 +126,20 @@ async function safeOnPrimaryRateLimited(
 ): Promise<void> {
   if (!cb) return;
   try {
-    await cb(resetAtMs);
+    await withFlagTimeout(Promise.resolve(cb(resetAtMs)));
   } catch (err) {
     warnFlagError(err);
+  }
+}
+
+/** 공유 플래그는 최적화이므로 Redis 지연이 답변을 막지 않게 한다. */
+async function withFlagTimeout<T>(operation: Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("모델 제한 상태 조회/저장 시간 초과")), 500);
+  try {
+    return await raceAbort(operation, controller.signal);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -171,8 +182,8 @@ export function createFallbackModel(opts: FallbackOptions): LanguageModelV4 {
           if (APICallError.isInstance(err) && err.statusCode === 429) await safeOnPrimaryRateLimited(opts.onPrimaryRateLimited, resetAtFrom(err));
         }
       }
-      const result = await fallback.doStream(options);
-      opts.onModelUsed?.({ tier: "fallback", modelId: fallback.modelId, reason });
+      const { result, modelId } = await streamWithFirstToken(fallback, options, opts.firstTokenTimeoutMs);
+      opts.onModelUsed?.({ tier: "fallback", modelId, reason });
       return result;
     },
   };

@@ -44,7 +44,7 @@ const rateLimited = (reset?: string) =>
   });
 
 async function run(model: ReturnType<typeof createFallbackModel>) {
-  const result = streamText({ model, prompt: "q", maxRetries: 0 });
+  const result = streamText({ model, prompt: "q", maxRetries: 0, onError: () => {} });
   let text = "";
   let error: unknown;
   for await (const part of result.stream) {
@@ -55,6 +55,65 @@ async function run(model: ReturnType<typeof createFallbackModel>) {
 }
 
 describe("createFallbackModel", () => {
+  it("times out a fallback that opens a stream without sending text", async () => {
+    const model = createFallbackModel({
+      primary: null,
+      fallback: new MockLanguageModelV4({ doStream: async () => ({ stream: new ReadableStream() }) }),
+      firstTokenTimeoutMs: 20,
+    });
+    const result = await run(model);
+    expect(result.text).toBe("");
+    expect(result.error).toBeInstanceOf(Error);
+  });
+
+  it("continues to the fallback when recording a rate limit hangs", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const model = createFallbackModel({
+        primary: rateLimited(),
+        fallback: streamingModel("paid", textParts("대체 답변")),
+        firstTokenTimeoutMs: 1000,
+        onPrimaryRateLimited: () => new Promise(() => {}),
+      });
+      expect((await run(model)).text).toBe("대체 답변");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("ends with an error when the fallback never starts answering", async () => {
+    const model = createFallbackModel({
+      primary: null,
+      fallback: new MockLanguageModelV4({ doStream: () => new Promise(() => {}) }),
+      firstTokenTimeoutMs: 20,
+    });
+    const result = await Promise.race([
+      run(model),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("fallback hung")), 200)),
+    ]);
+    expect(result.text).toBe("");
+    expect(result.error).toBeInstanceOf(Error);
+  });
+
+  it("tries the primary when the shared flag lookup never returns", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const model = createFallbackModel({
+        primary: streamingModel("free", textParts("답변")),
+        fallback: streamingModel("paid", textParts("대체")),
+        firstTokenTimeoutMs: 1000,
+        skipPrimary: () => new Promise(() => {}),
+      });
+      const result = await Promise.race([
+        run(model),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("flag hung")), 1500)),
+      ]);
+      expect(result.text).toBe("답변");
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it("answers with the free model when it streams in time", async () => {
     const used: ModelUsed[] = [];
     const model = createFallbackModel({

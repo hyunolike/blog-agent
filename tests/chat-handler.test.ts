@@ -154,6 +154,23 @@ describe("handleChat", () => {
     for (const call of log.mock.calls) expect(JSON.stringify(call[0])).not.toContain("점검");
   });
 
+  it("sends related sources and an error when the fallback hangs", async () => {
+    const log = vi.fn();
+    const res = await handleChat(request(ask("점검")), deps({
+      createModel: (onUsed) => createFallbackModel({
+        primary: null,
+        fallback: new MockLanguageModelV4({ doStream: () => new Promise(() => {}) }),
+        firstTokenTimeoutMs: 20,
+        onModelUsed: onUsed,
+      }),
+      log,
+    }));
+    const chunks = await sse(res);
+    expect(chunks[0].messageMetadata.sources.length).toBeGreaterThan(0);
+    expect(chunks.find((c) => c.type === "error")).toMatchObject({ errorText: AI_UNAVAILABLE });
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ outcome: "all_models_failed" }));
+  });
+
   it("uses the viewed post only when from is a real post url", async () => {
     const search = vi.fn((_input: SearchInput): RetrievedChunk[] => []);
     await handleChat(request(ask("요약해줘", { from: "https://hyunolike.tistory.com/70" })), deps({ searcher: { search } }));

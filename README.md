@@ -167,7 +167,7 @@ Production에 아래 변수를 설정합니다. 도메인 값은 자신의 배�
 | 변수 | 타입 | 값 또는 용도 |
 | --- | --- | --- |
 | `NVIDIA_API_KEY` | Secret | NVIDIA API 키 |
-| `CHAT_MODELS` | Config | `nvidia/nemotron-3-super-120b-a12b,openai/gpt-oss-20b` |
+| `CHAT_MODELS` | Config | `nvidia/nemotron-3.5-lightning-30b-a3b,nvidia/nemotron-3.5-bolt-e4b` |
 | `APP_ORIGIN` | Config | `https://blog-agent-ruddy.vercel.app` (끝에 `/` 없이) |
 | `FRAME_ANCESTORS` | Config | `https://hyunolike.tistory.com` |
 | `UPSTASH_REDIS_REST_URL` | Secret | Redis REST URL |
