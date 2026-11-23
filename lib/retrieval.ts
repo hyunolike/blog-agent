@@ -66,6 +66,8 @@ export function createSearcher(index: BlogIndex): Searcher {
     if (!queryVector || queryVector.length !== index.dimensions) return [];
     const q = normalize(queryVector);
     const scores = vectors.map((v) => {
+      // 안전 필터에 거부돼 벡터가 없는 조각은 키워드 검색으로만 찾는다
+      if (v.length !== q.length) return -Infinity;
       let dot = 0;
       for (let i = 0; i < v.length; i++) dot += v[i]! * q[i]!;
       return dot;

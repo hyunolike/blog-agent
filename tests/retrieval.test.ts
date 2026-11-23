@@ -155,6 +155,14 @@ describe("createSearcher", () => {
     expect(results[0]!.post.id).toBe(3);
   });
 
+  it("finds chunks without a vector (rejected by the embedding filter) by keyword only", () => {
+    const withHole: BlogIndex = { ...index, chunks: [...index.chunks, { ...chunk(3, 2, "bxSlider 초기화", [0, 0]), vector: "" }] };
+    const s = createSearcher(withHole);
+    expect(s.search({ query: "bxSlider", queryVector: [0.7, 0.7], currentPostId: null }).map((r) => r.chunk.id)).toContain("3-2");
+    // 벡터 순위에는 끼지 않는다: 키워드가 맞지 않으면 나오지 않는다
+    expect(s.search({ query: "", queryVector: [0.7, 0.7], currentPostId: null }).map((r) => r.chunk.id)).not.toContain("3-2");
+  });
+
   it("returns nothing when there is neither a usable query nor a current post", () => {
     expect(searcher.search({ query: "!!!", queryVector: null, currentPostId: null })).toEqual([]);
   });
