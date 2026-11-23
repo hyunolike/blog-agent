@@ -16,6 +16,9 @@ const RETRY_BASE_MS = 1000;
  */
 export const CHAT_REQUEST_EXTRAS = { reasoning_effort: "low", chat_template_kwargs: { enable_thinking: false } };
 
+/** 제공자의 콘텐츠 안전 필터가 입력을 거부했다(HTTP 422). 코드가 많은 기술 글 조각이 오탐으로 걸리곤 한다. */
+export class EmbedRejectedError extends Error {}
+
 const isTemporary = (status: number) => status === 429 || status >= 500;
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -53,6 +56,8 @@ export function createProvider(
         return [...json.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
       }
       const detail = (await res.text().catch(() => "")).slice(0, 200);
+      // 422는 요청 형식 오류에도 쓰이므로 안전 필터 거부일 때만 따로 구분한다
+      if (res.status === 422 && /content safety/i.test(detail)) throw new EmbedRejectedError(`임베딩 입력 거부: ${res.status} ${detail}`);
       // 무료 API는 502나 429를 가끔 돌려준다. 잠깐 기다렸다가 다시 시도한다
       if (!isTemporary(res.status) || attempt >= EMBED_ATTEMPTS) throw new Error(`임베딩 요청 실패: ${res.status} ${detail}`);
       await sleep(RETRY_BASE_MS * 2 ** (attempt - 1));

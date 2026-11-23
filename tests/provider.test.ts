@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { CHAT_REQUEST_EXTRAS, createProvider, NVIDIA_BASE_URL } from "@/lib/provider";
+import { CHAT_REQUEST_EXTRAS, createProvider, EmbedRejectedError, NVIDIA_BASE_URL } from "@/lib/provider";
 
 const ok = (vectors: number[][]) =>
   new Response(JSON.stringify({ data: vectors.map((embedding, index) => ({ index, embedding })) }), { status: 200 });
@@ -71,6 +71,17 @@ describe("createProvider().embed", () => {
     const notFound = vi.fn(async () => new Response("nope", { status: 404 }));
     await expect(createProvider("k", notFound, async () => {}).embed("m", ["a"], "passage")).rejects.toThrow("404");
     expect(notFound).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks content safety rejections (422) apart from other 422 errors, without retrying", async () => {
+    const safety = vi.fn(async () => new Response('{"error": {"message": "input rejected by content safety screening"}}', { status: 422 }));
+    await expect(createProvider("k", safety, async () => {}).embed("m", ["a"], "passage")).rejects.toBeInstanceOf(EmbedRejectedError);
+    expect(safety).toHaveBeenCalledTimes(1);
+
+    const invalid = vi.fn(async () => new Response('{"detail":"input_type must be query or passage"}', { status: 422 }));
+    const err = await createProvider("k", invalid, async () => {}).embed("m", ["a"], "passage").catch((e: Error) => e);
+    expect(err).not.toBeInstanceOf(EmbedRejectedError);
+    expect((err as Error).message).toContain("422");
   });
 
   it("returns no vectors for no texts without calling the API", async () => {

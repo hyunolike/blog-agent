@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { buildIndex, sameContent, type BuildDeps } from "@/ingest/build";
+import { EmbedRejectedError } from "@/lib/provider";
 
 const html70 = readFileSync("tests/fixtures/posts/70.html", "utf8");
 const html1 = readFileSync("tests/fixtures/posts/1.html", "utf8");
@@ -73,6 +74,39 @@ describe("buildIndex", () => {
     expect(twice.chunks).toEqual(once.chunks);
     const removed = await buildIndex(twice, deps({ xml }));
     expect(removed.chunks).toEqual(plain.chunks);
+  });
+
+  it("isolates chunks rejected by the safety filter, retries them without code, and leaves the rest embedded", async () => {
+    const xml = sitemap([[70, "2026-09-17T23:14:22+09:00"]]);
+    const plain = await buildIndex(null, deps({ xml }));
+    const withCode = plain.chunks.find((c) => c.embedText.includes("```"))!;
+    const target = plain.chunks.find((c) => c.kind === "summary")!;
+    // 코드가 든 조각은 코드를 빼면 통과하고, 요약 조각은 어떻게 보내도 거부된다
+    const embed = vi.fn(async (texts: string[]) => {
+      if (texts.some((t) => t === target.embedText || t === withCode.embedText)) throw new EmbedRejectedError("422");
+      return texts.map((t) => [t.length, 1, 0]);
+    });
+    const logs: string[] = [];
+    const index = await buildIndex(null, deps({ xml, embed, log: (m) => logs.push(m) }));
+
+    expect(index.chunks.find((c) => c.id === target.id)!.vector).toBe("");
+    expect(index.chunks.find((c) => c.id === withCode.id)!.vector).not.toBe("");
+    expect(index.chunks.filter((c) => c.vector === "").length).toBe(1);
+    expect(index.dimensions).toBe(3);
+    expect(logs.some((m) => m.includes(`embed rejected 1 chunks`) && m.includes(target.id))).toBe(true);
+
+    // 거부된 조각은 캐시하지 않아 다음 실행에서 그 조각만 다시 시도한다
+    const retry = vi.fn(async (texts: string[]) => texts.map((t) => [t.length, 1, 0]));
+    const next = await buildIndex(index, deps({ xml, embed: retry }));
+    expect(retry.mock.calls.flatMap((c) => c[0])).toEqual([target.embedText]);
+    expect(next.chunks.every((c) => c.vector !== "")).toBe(true);
+  });
+
+  it("does not swallow embedding errors other than safety rejections", async () => {
+    const embed = vi.fn(async () => {
+      throw new Error("임베딩 요청 실패: 410 Gone");
+    });
+    await expect(buildIndex(null, deps({ xml: sitemap([[70, "2026-09-17T23:14:22+09:00"]]), embed }))).rejects.toThrow("410");
   });
 
   it("refuses to build from an empty sitemap", async () => {

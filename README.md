@@ -173,7 +173,7 @@ Production에 아래 변수를 설정합니다. 도메인 값은 자신의 배�
 | `UPSTASH_REDIS_REST_URL` | Secret | Redis REST URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Secret | Redis REST 토큰 |
 
-`EMBEDDING_MODEL`은 선택 사항입니다. 수집의 기본값은 `nvidia/nemotron-3-embed-1b`이며, 채팅은 인덱스에 기록된 모델로 질문을 임베딩합니다.
+`EMBEDDING_MODEL`은 선택 사항입니다. 수집의 기본값은 `nvidia/nemotron-3.5-embed-1b`이며, 채팅은 인덱스에 기록된 모델로 질문을 임베딩합니다.
 
 연결된 프로젝트에서 프로덕션을 배포하는 명령은 다음과 같습니다.
 
