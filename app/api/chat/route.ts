@@ -1,6 +1,7 @@
 import { Redis } from "@upstash/redis";
 import { handleChat, type ChatDeps } from "@/lib/chat-handler";
 import { pickEmbeddingModel, readEnv } from "@/lib/env";
+import { sharedFeedbackStore } from "@/lib/feedback-deps";
 import { createMemoryFlags, createRedisFlags } from "@/lib/flags";
 import { loadIndex } from "@/lib/index-store";
 import { createMemoryLimiters, createUpstashLimiters } from "@/lib/limits";
@@ -30,6 +31,7 @@ function getDeps(): ChatDeps {
     limits: redis ? createUpstashLimiters(redis) : createMemoryLimiters(),
     allowedOrigins: env.allowedOrigins,
     log: (entry) => console.log(JSON.stringify(entry)),
+    feedback: sharedFeedbackStore(redis),
   };
   return deps;
 }
