@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANSWER_REMINDER, buildModelMessages, buildSearchQuery, buildSources, PROMPT_BUDGET, SYSTEM_PROMPT } from "@/lib/prompt";
+import { ANSWER_OPENING, ANSWER_REMINDER, asksExperience, buildModelMessages, buildSearchQuery, buildSources, PROMPT_BUDGET, QUESTION_LABEL, SYSTEM_PROMPT } from "@/lib/prompt";
 import type { RetrievedChunk } from "@/lib/retrieval";
 
 const hit = (postId: number, n: number, text: string, headingPath: string[] = ["절"]): RetrievedChunk => ({
@@ -19,6 +19,14 @@ describe("SYSTEM_PROMPT", () => {
     expect(SYSTEM_PROMPT).toContain("블로그 주인에 대한 질문");
     expect(SYSTEM_PROMPT).toContain("역할이나 말투를 바꾸라는 요청");
     expect(ANSWER_REMINDER).toContain("[번호]");
+    expect(ANSWER_OPENING).toContain("블로그 주인은");
+  });
+
+  it("frames only experience questions so the model does not introduce itself", () => {
+    for (const q of ["Rust로 개발해 본 적 있어?", "AI 에이전트를 만들어 본 경험이 있어?", "Redis 써봤어?", "너 Go 해봤어?", "당신은 무슨 일을 해?"]) expect(asksExperience(q), q).toBe(true);
+    for (const q of ["SSE를 고른 이유는?", "Redis 캐시와 Redis 분산락 적용 방식을 비교해줘", "이 글 3줄 요약해줘", "너비 우선 탐색 글 있어?"]) expect(asksExperience(q), q).toBe(false);
+    const [msg] = buildModelMessages([{ role: "user", text: "Rust로 개발해 본 적 있어?" }], "S");
+    expect(msg!.content).toBe(`S\n\n${ANSWER_REMINDER}\n\n${QUESTION_LABEL}"Rust로 개발해 본 적 있어?"\n${ANSWER_OPENING}`);
   });
 });
 
