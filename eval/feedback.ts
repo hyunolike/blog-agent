@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Redis } from "@upstash/redis";
 import { createRedisFeedbackStore, type FeedbackRecord } from "@/lib/feedback";
+import { loadQuestions } from "./load";
 
 export type FeedbackSummary = { group: string; up: number; down: number; reasons: Record<string, number> };
 
@@ -39,6 +40,13 @@ export function toCandidate(r: FeedbackRecord) {
   };
 }
 
+/** 이미 평가셋(eval/questions.jsonl)에 옮긴 후보는 빼서, 다시 실행해도 새 👎만 검토하게 한다 */
+export function newCandidates(records: FeedbackRecord[], existingIds: Set<string>) {
+  const all = records.map(toCandidate);
+  const fresh = all.filter((c) => !existingIds.has(c.id));
+  return { fresh, skipped: all.length - fresh.length };
+}
+
 async function main() {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -57,10 +65,12 @@ async function main() {
   print("프롬프트 버전별", summarize(records, (r) => r.promptVersion));
 
   const down = records.filter((r) => r.rating === "down").sort((a, b) => a.ratedAt.localeCompare(b.ratedAt));
+  const { fresh, skipped } = newCandidates(down, new Set(loadQuestions().map((q) => q.id)));
   mkdirSync("eval/results", { recursive: true });
   const out = "eval/results/feedback-candidates.jsonl";
-  writeFileSync(out, down.map((r) => JSON.stringify(toCandidate(r))).join("\n") + (down.length ? "\n" : ""));
-  console.log(`\n👎 ${down.length}건을 ${out}에 썼습니다. expectedPostIds를 채운 뒤 eval/questions.jsonl로 옮기세요.`);
+  writeFileSync(out, fresh.map((c) => JSON.stringify(c)).join("\n") + (fresh.length ? "\n" : ""));
+  console.log(`\n👎 ${down.length}건 중 평가셋에 이미 있는 ${skipped}건을 빼고 ${fresh.length}건을 ${out}에 썼습니다.`);
+  console.log("이 파일은 실행할 때마다 새로 씁니다. expectedPostIds를 채운 줄은 바로 eval/questions.jsonl로 옮기세요.");
 }
 
 // 테스트에서 summarize, toCandidate만 가져다 쓸 때는 실행하지 않는다
