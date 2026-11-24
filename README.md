@@ -147,14 +147,24 @@ npm run dev                 # http://localhost:3000/dev-host.html 에서 위젯 
 
 인덱스를 갱신하려면 `npm run ingest`를 실행합니다. 로컬에서 Redis 설정을 비워두면 메모리 요청 제한을 사용하며, 배포에서는 인스턴스 사이에 요청 수를 공유하도록 Redis를 설정합니다.
 
-검증 명령은 다음과 같습니다. 검색 평가에는 실제 NVIDIA API 호출이 필요합니다.
+기본 검증은 API 키 없이 실행할 수 있습니다.
 
 ```bash
 npm test
-npm run build
+npm run test:coverage
 npm run typecheck
-npm run eval:retrieval
+npm run build
+# .env.local을 읽지 않고 NVIDIA 키도 비워 키워드 검색만 평가 (macOS/Linux)
+NVIDIA_API_KEY='' node --import tsx eval/retrieval.ts
 ```
+
+### PR 검사와 커버리지
+
+[`CI`](.github/workflows/ci.yml)는 모든 PR과 `develop` push에서 Node.js 22로 단위 테스트(커버리지 포함), 키워드 검색 평가, 타입 검사, 빌드를 실행합니다. 비밀키를 넣지 않으므로 NVIDIA API는 호출하지 않습니다. 커버리지 보고서는 `coverage-<run_id>-<attempt>` artifact로 7일 동안 받을 수 있습니다. 테스트가 닿지 않는 API 진입점과 UI도 0%로 드러나도록 범위에 넣었고, 최소 커버리지 기준은 두지 않았습니다.
+
+### 별도 실행하는 모델 평가
+
+`npm run eval:retrieval`은 `.env.local`의 `NVIDIA_API_KEY`가 있으면 질문을 임베딩해 하이브리드 검색을 평가하고, 없으면 키워드 검색만 평가합니다. `npm run eval:answers -- <model> [model...]`은 키가 필요하며 실제 답변을 생성합니다. 질문과 검색된 글이 제공자에게 전송되고 할당량을 쓰므로 PR CI에는 넣지 않았습니다.
 
 ## 배포
 
