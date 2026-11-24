@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryFeedbackStore, FEEDBACK_TTL, handleFeedback, type FeedbackDeps, type ResponseContext } from "@/lib/feedback";
-import { newCandidates, summarize, toCandidate } from "@/eval/feedback";
+import { createMemoryFeedbackStore, createRedisFeedbackStore, FEEDBACK_TTL, handleFeedback, type FeedbackDeps, type ResponseContext } from "@/lib/feedback";
+import { newCandidates, planExport, summarize, toCandidate } from "@/eval/feedback";
 
 const ORIGIN = "https://chat.example.dev";
 const ID = "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f";
@@ -134,5 +134,65 @@ describe("feedback export", () => {
     const { fresh, skipped } = newCandidates([rec({}), rec({ responseId: other })], new Set(["fb-3f2b8c1e", "q-01"]));
     expect(fresh.map((c) => c.id)).toEqual(["fb-9a8b7c6d"]);
     expect(skipped).toBe(1);
+  });
+});
+
+describe("approved review export", () => {
+  const review = (responseId: string, over: object = {}) => ({
+    responseId,
+    action: "approve" as const,
+    expectedPostIds: [70],
+    reviewedBy: 7,
+    reviewedAt: "2026-11-24T12:00:00.000Z",
+    question: "점검 플래그 어디에 뒀어?",
+    history: [] as string[],
+    currentPostId: null as number | null,
+    ...over,
+  });
+  const A = "3f2b8c1e-0000-4000-8000-000000000001";
+  const B = "9a8b7c6d-0000-4000-8000-000000000002";
+
+  it("turns approvals into eval questions from the snapshot only", () => {
+    const { added, already, warnings } = planExport(
+      [review(A, { history: ["이전 질문"], currentPostId: 70 }), review(B, { action: "dismiss", expectedPostIds: [] })],
+      new Set(),
+      new Set([70]),
+    );
+    expect(added).toEqual([{ id: "fb-3f2b8c1e", type: "followup", question: "점검 플래그 어디에 뒀어?", history: ["이전 질문"], currentPostId: 70, expectedPostIds: [70] }]);
+    expect(added[0]).not.toHaveProperty("feedback");
+    expect({ already, warnings }).toEqual({ already: 0, warnings: [] });
+  });
+
+  it("adds each approval once across runs", () => {
+    const first = planExport([review(A)], new Set(["q-01"]), new Set([70]));
+    const second = planExport([review(A)], new Set(["q-01", ...first.added.map((q) => q.id)]), new Set([70]));
+    expect(first.added).toHaveLength(1);
+    expect(second).toEqual({ added: [], already: 1, warnings: [] });
+  });
+
+  it("skips posts missing from the index and colliding ids", () => {
+    const twin = "3f2b8c1e-ffff-4000-8000-000000000009";
+    const { added, warnings } = planExport([review(A), review(twin, { reviewedAt: "2026-11-25T00:00:00.000Z" }), review(B, { expectedPostIds: [999] })], new Set(), new Set([70]));
+    expect(added.map((q) => q.id)).toEqual(["fb-3f2b8c1e"]);
+    expect(warnings).toHaveLength(2);
+  });
+});
+
+describe("redis review store", () => {
+  const review = { action: "dismiss" as const, expectedPostIds: [], reviewedBy: 7, reviewedAt: "2026-11-24T12:00:00.000Z", question: "q", history: [], currentPostId: null };
+  const fakeRedis = (over: Record<string, unknown>) =>
+    ({ set: vi.fn(async () => "OK"), zadd: vi.fn(async () => 1), del: vi.fn(async () => 1), ...over }) as unknown as Parameters<typeof createRedisFeedbackStore>[0];
+
+  it("writes with NX and reports an existing review", async () => {
+    const redis = fakeRedis({ set: vi.fn(async () => null) });
+    expect(await createRedisFeedbackStore(redis).saveReview(ID, review)).toBe(false);
+    expect((redis as unknown as { set: ReturnType<typeof vi.fn> }).set).toHaveBeenCalledWith(`fb:rev:${ID}`, review, { ex: FEEDBACK_TTL.reviewSec, nx: true });
+    expect((redis as unknown as { zadd: ReturnType<typeof vi.fn> }).zadd).not.toHaveBeenCalled();
+  });
+
+  it("rolls the review back when the index write fails", async () => {
+    const redis = fakeRedis({ zadd: vi.fn(async () => { throw new Error("down"); }) });
+    await expect(createRedisFeedbackStore(redis).saveReview(ID, review)).rejects.toThrow("down");
+    expect((redis as unknown as { del: ReturnType<typeof vi.fn> }).del).toHaveBeenCalledWith(`fb:rev:${ID}`);
   });
 });

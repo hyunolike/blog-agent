@@ -95,6 +95,139 @@
 
 남은 한계: 경험 질문의 답이 "블로그 주인에는 …라는 내용이 없습니다"처럼 어색한 조사로 시작하기도 한다. 답변 평가 1회에서 q17 답의 첫 줄에 질문 안내 문구가 옮겨 적혔다(문구 비교 15회에서는 0회). q18("Redis를 어떤 곳에 써봤어?")은 고친 뒤 두 번 모두 Redis 캐시 글(15)을 인용하지 않아 실패했다. 안내 문구 때문인지는 확인하지 못했다.
 
+## 2026-11-24 기능 추가: 평가 검토 화면
+
+👎 후보를 검토하려면 지금은 `npm run feedback`이 만든 JSONL을 열어 글 ID를 손으로 찾아 적어야 한다. 검토를 미루기 쉽고, 미루면 평가가 90일 뒤 사라진다. 배포된 관리자 화면에서 후보를 보고 정답 글을 골라 승인하게 한다. 평가셋 파일(`eval/questions.jsonl`)은 지금처럼 로컬에서 커밋한다. 배포 서버에는 저장소 쓰기 권한을 두지 않는다.
+
+### A1 설정
+
+`readAdminEnv(env): AdminEnv | null`을 `readEnv`와 따로 둔다. 아래 중 하나라도 없거나 조건에 맞지 않으면 null이고, 관리자 경로(`/admin`, `/api/admin/*`)는 모두 404다. 채팅은 영향받지 않는다. 시크릿이 32자보다 짧으면 설정 경고 로그를 한 번 남긴다.
+
+| 변수 | 조건 |
+|---|---|
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | 비어 있지 않음 |
+| `ADMIN_SESSION_SECRET` | 32자 이상 |
+| `ADMIN_GITHUB_IDS` | 쉼표로 구분한 GitHub 숫자 사용자 ID, 1개 이상 |
+| `APP_ORIGIN` | 기존 값. `redirect_uri`와 Secure 판단에 쓴다 |
+
+허용 목록은 로그인 이름이 아니라 숫자 ID로 한다. 로그인 이름은 바뀔 수 있고, 버린 이름을 다른 사람이 가져갈 수 있다. 관리자 경로는 Origin 검사에 `readEnv().allowedOrigins`를 쓰고 Redis 설정도 같은 곳에서 읽는다. Vercel(`VERCEL_ENV`가 있음)에서 Redis 설정이 없으면 메모리 저장소로 바꾸지 않고 503을 돌려준다. 인스턴스마다 따로인 메모리에 검토 결과를 쓰면 사라지기 때문이다.
+
+### A2 로그인
+
+라이브러리 없이 직접 구현한다. `redirect_uri`는 항상 `${APP_ORIGIN}/api/admin/callback`이고, 요청 헤더의 Host로 만들지 않는다. 인가 요청과 토큰 교환에 같은 값을 보낸다.
+
+- `GET /api/admin/login`: `crypto.randomBytes(16)`로 `state`를 만들어 쿠키 `admin_oauth_state`에 둔다. 쿠키 속성은 HttpOnly, SameSite=Lax, Path=/api/admin/callback, Max-Age=600이고, Secure는 아래 규칙을 따른다. 그런 다음 `https://github.com/login/oauth/authorize?client_id&redirect_uri&state`로 302 응답한다. scope는 비운다.
+- `GET /api/admin/callback`: 모든 응답에서 state 쿠키를 지운다. 실패 응답은 짧은 HTML("로그인하지 못했어요"와 `/admin` 링크)이다.
+
+| 상황 | 응답 |
+|---|---|
+| `error` 쿼리가 있음, `code`나 `state`가 없음, 쿠키가 없음, state가 다름(상수 시간 비교) | 400 |
+| 토큰 교환이나 `/user` 호출이 2xx가 아님, 응답에 `access_token`이 없음, 5초 초과 | 502 |
+| `/user`의 `id`가 허용 목록에 없음 | 403 |
+| 성공 | 세션 쿠키를 설정하고 303으로 `/admin` 이동 |
+
+  토큰 교환은 `POST https://github.com/login/oauth/access_token`에 `Accept: application/json`을 보낸다. `/user` 호출에는 `User-Agent: blog-agent`와 `Authorization: Bearer`를 보낸다. GitHub 토큰은 저장하지 않는다.
+- 세션 쿠키: 값은 `base64url(JSON{v:1, sub:<GitHub id>, login, exp:<epoch초>})` 뒤에 `.`과 `base64url(HMAC-SHA256(secret, 앞부분))`을 붙인 것이다. 만료는 8시간이고 Max-Age=28800, HttpOnly, SameSite=Lax, Path=/다.
+  - 이름은 `APP_ORIGIN`이 https이면 `__Host-admin_session`(Secure)이고, http(로컬)이면 `admin_session`(Secure 없음)이다.
+  - 검증할 때 길이를 확인한 뒤 `timingSafeEqual`로 비교하고, `exp`와 `sub`가 허용 목록에 있는지도 본다. 하나라도 틀리면 로그인하지 않은 것으로 본다.
+- `POST /api/admin/logout`: Origin 검사를 하고 쿠키를 지운 뒤 303으로 `/admin`에 보낸다. 로그아웃은 그 브라우저의 쿠키만 지운다. 복사된 쿠키를 모두 무효로 하려면 `ADMIN_SESSION_SECRET`을 바꾼다.
+- 로그인 경로에는 요청 한도를 따로 두지 않는다. 허용 목록 밖 계정은 GitHub 인증을 거쳐도 들어오지 못한다.
+
+### A3 저장소
+
+`FeedbackStore`에 아래 메서드를 더한다. Redis와 메모리 저장소 모두 구현하고, 메모리 저장소도 같은 TTL을 지킨다(메모리 저장소의 평가 기록에도 90일 TTL을 맞춘다).
+
+```ts
+type Review = {
+  action: "approve" | "dismiss";
+  expectedPostIds: number[];   // dismiss는 []
+  reviewedBy: number;          // GitHub id
+  reviewedAt: string;
+  // 내보내기용 스냅샷. 평가 기록(90일)이 먼저 만료돼도 내보낼 수 있게 승인 시점에 복사한다
+  question: string;
+  history: string[];           // 이전 사용자 질문
+  currentPostId: number | null;
+};
+getFeedback(id): Promise<FeedbackRecord | null>;
+getReview(id): Promise<Review | null>;
+saveReview(id, review): Promise<void>;
+listReviews(): Promise<(Review & { responseId: string })[]>;
+```
+
+- Redis 키는 `fb:rev:<id>`(180일)와 정렬 집합 `fb:rev:index`(점수는 `reviewedAt` ms)다. 목록을 읽을 때 본문이 만료된 ID는 `listFeedback`처럼 정렬 집합에서도 지운다.
+- 검토는 응답 ID당 한 번으로 끝난다. 이미 검토한 ID에 다시 보내면 409다. 내보낸 파일과 Redis가 서로 달라지는 일을 막는다. 검토 뒤에 사용자가 평가를 바꿔도 목록에 다시 나오지 않는다.
+
+### A4 검토 화면 `/admin`
+
+`dynamic = "force-dynamic"`인 서버 컴포넌트다. `readAdminEnv()`가 null이면 `notFound()`를 부른다. 페이지가 직접 세션을 검증하며, 로그인하지 않았으면 "GitHub로 로그인" 버튼만 보인다. 로그인하면 아래 목록과 글 목록을 서버에서 읽어 넘긴다.
+
+- 목록: 아래 조건을 모두 만족하는 평가를 `ratedAt` 최근순으로 보여 준다.
+  - `rating === "down"`이다.
+  - 아직 검토 결과가 없다.
+  - `fb-` ID가 배포에 포함된 `eval/questions.jsonl`에 아직 없다. 지금까지 손으로 옮긴 건이 다시 나오지 않게 하려는 조건이다.
+- 카드마다 질문, 이전 사용자 질문, 답변, 👎 사유, 모델, 프롬프트 버전, 평가 시각을 보여 준다. 그때 검색된 글과 보고 있던 글은 제목과 링크로 보여 주고, 인덱스에 없는 글은 "(인덱스에 없는 글 #id)"로 표시한다.
+- 정답 글 고르기: 검색된 글은 체크박스로 고르고, 그 밖의 글은 제목 검색으로 추가한다. 글 목록은 인덱스에서 `{id, title, url}`만 넘긴다. 임베딩은 넘기지 않는다. 인덱스를 읽지 못하면 화면에 "글 인덱스를 읽지 못했어요"를 보여 주고 승인 버튼을 끈다.
+- 동작은 "승인"(정답 글 1~10개)과 "제외" 두 가지다. 처리한 카드는 목록에서 빠지고, 실패하면 카드에 오류 문구를 보여 준다.
+- `next.config.ts`의 `outputFileTracingIncludes`에 `/admin`과 `/api/admin/reviews` 경로를 넣는다. 포함할 파일은 `data/index.json`과 `eval/questions.jsonl`이다.
+
+### A5 검토 API `/api/admin/reviews`
+
+모든 요청은 세션이 없으면 401이고, POST는 Origin이 다르면 403이다. 오류 본문은 `{error: "unauthorized"|"forbidden"|"invalid"|"not_found"|"conflict"|"unavailable"}` 중 하나다.
+
+- `GET`: 화면 목록과 같은 조건으로 `{items: [{responseId, question, previousQuestions, answer, reason, model, promptVersion, ratedAt, retrievedPosts: [{id, title|null, url|null}], currentPost: {id, title|null, url|null}|null}]}`를 돌려준다. 화면이 처리 후 목록을 다시 불러올 때 쓴다.
+- `POST`: 본문은 1KB 이하이고 zod로 검사한다. 형식은 `{responseId: uuid, action: "approve"|"dismiss", expectedPostIds?: 양의 정수 배열}`이다.
+
+| 상황 | 응답 |
+|---|---|
+| 형식이 틀림 | 400 `invalid` |
+| 승인인데 `expectedPostIds`가 비었거나 10개를 넘음, 인덱스에 없는 ID가 있음 | 400 `invalid` |
+| 평가 기록이 없거나 👍임 | 404 |
+| 이미 검토함 | 409 |
+| 인덱스를 읽지 못함, 저장 실패 | 503 |
+| 성공 | 200 `{ok: true}` |
+
+  중복 ID는 하나로 합친다. 제외(`dismiss`)는 `expectedPostIds: []`로 저장한다.
+- 응답 헤더: `next.config.ts`의 `headers()`로 `/admin`, `/admin/:path*`, `/api/admin/:path*`에 `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Content-Security-Policy: frame-ancestors 'none'`을 붙인다.
+
+### A6 내보내기 (`npm run feedback`)
+
+- 승인한 검토 가운데 ID가 평가셋에 없는 것을 `eval/questions.jsonl` 끝에 추가한다. 파일이 줄바꿈으로 끝나지 않으면 먼저 줄바꿈을 넣는다.
+  - 내용은 검토의 스냅샷으로 만든다. 평가 기록은 읽지 않는다.
+  - 유형 규칙은 `toCandidate`와 같다(`followup`, `current`, `single`). `feedback` 필드는 넣지 않는다.
+- 정답 글 ID가 로컬 인덱스에 없으면 건너뛰고 경고를 출력한다.
+- 같은 `fb-` ID가 다른 응답에서 나오면(UUID 앞 8자리 충돌) 건너뛰고 경고를 출력한다.
+- 승인하거나 제외한 건은 후보 파일에서 뺀다. 추가한 건수와 건너뛴 건수를 출력한다. 커밋은 사람이 한다.
+
+### A7 기록
+
+로그는 `event: "admin_login"`(결과 ok/denied/error, GitHub `id`)과 `event: "admin_review"`(`id`, `responseId`, `action`) 두 가지를 남긴다. 거절된 계정의 로그인 이름, 질문과 답변 본문은 남기지 않는다.
+
+### 범위 밖
+
+여러 권한 등급, 평가셋 항목 편집과 삭제, 검토 취소, 평가 기록 삭제, GitHub로 직접 커밋, 검토 화면의 페이지 나누기(후보가 수백 건이 되면 다시 본다)는 이번에 하지 않는다.
+
+### 수용 기준과 검증
+
+단위 테스트로 아래를 확인한다. GitHub 호출은 가짜로 바꾼다.
+
+- **설정:** 변수가 없거나 시크릿이 짧거나 ID 목록이 비면 `readAdminEnv`가 null이고 관리자 경로는 404다.
+- **세션:** 서명을 바꾼 쿠키, 만료된 쿠키, 허용 목록에서 빠진 ID의 쿠키는 모두 `GET /api/admin/reviews`에서 401을 받는다.
+- **콜백:**
+  - state가 다르면 400이고 세션 쿠키를 설정하지 않는다.
+  - 허용 목록 밖 ID는 403이다.
+  - 토큰 교환 실패는 502다.
+  - 어떤 경우에도 state 쿠키를 지운다.
+- **검토 API:**
+  - 다른 Origin은 403, 👍 기록은 404, 두 번째 검토는 409다.
+  - 승인한 건은 목록에서 빠진다.
+  - 평가셋에 이미 있는 ID는 목록에 나오지 않는다.
+- **내보내기:**
+  - 두 번 실행해도 한 줄만 추가된다.
+  - 평가 기록이 만료된 승인 건도 스냅샷으로 추가된다.
+  - 제외한 건은 후보 파일에 나오지 않는다.
+
+브라우저 확인은 로컬 http와 메모리 저장소로 한다. 이를 위해 콜백이 `http://localhost:3000/api/admin/callback`인 로컬용 OAuth App을 따로 둔다. 실제 GitHub 로그인은 운영 주소에서 확인한다. 미리보기 주소는 배포마다 바뀌어 콜백 URL을 등록할 수 없다.
+
 ## 1. 목적과 범위
 
 티스토리 블로그에 iframe으로 채팅창을 띄우고, 블로그 글을 근거로 답하는 AI를 만든다.
