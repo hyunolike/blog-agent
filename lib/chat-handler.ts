@@ -142,7 +142,8 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
             await deps.feedback.saveContext(responseId, {
               question: safeMessages[safeMessages.length - 1]!.text,
               history: safeMessages.slice(0, -1),
-              answer: text,
+              // 질문만 가려도 모델이 검색된 글의 연락처 등을 옮길 수 있어 답변도 저장 전에 가린다
+              answer: maskPii(text).text,
               chunkIds: results.slice(0, sources.length).map((r) => r.chunk.id),
               postIds,
               currentPostId,

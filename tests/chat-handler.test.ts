@@ -300,6 +300,19 @@ describe("handleChat feedback context", () => {
     expect(JSON.stringify(ctx)).not.toContain("5678");
   });
 
+  it("masks PII in the generated answer before storing the context", async () => {
+    const feedback = createMemoryFeedbackStore();
+    const leaky = (onUsed: Parameters<ChatDeps["createModel"]>[0]) =>
+      createFallbackModel({ primary: null, fallback: okModel("문의는 owner@example.com 으로 하면 된다[1]"), firstTokenTimeoutMs: 1000, onModelUsed: onUsed });
+    const chunks = await sse(await handleChat(request(ask("연락처 알려줘")), deps({ feedback, createModel: leaky })));
+    const text = chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("");
+    // 화면에 보이는 답은 그대로 두고, 저장하는 맥락만 가린다
+    expect(text).toContain("owner@example.com");
+    const ctx = await feedback.getContext(chunks[0].messageMetadata.responseId as string);
+    expect(ctx!.answer).toBe("문의는 [이메일] 으로 하면 된다[1]");
+    expect(JSON.stringify(ctx)).not.toContain("owner@example.com");
+  });
+
   it("stores nothing when every model fails", async () => {
     const feedback = createMemoryFeedbackStore();
     const save = vi.spyOn(feedback, "saveContext");

@@ -166,7 +166,7 @@ NVIDIA_API_KEY='' node --import tsx eval/retrieval.ts
 
 `npm run eval:retrieval`은 `.env.local`의 `NVIDIA_API_KEY`가 있으면 질문을 임베딩해 하이브리드 검색을 평가하고, 없으면 키워드 검색만 평가합니다. `npm run eval:answers -- <model> [model...]`은 키가 필요하며 실제 답변을 생성합니다. 질문과 검색된 글이 제공자에게 전송되고 할당량을 쓰므로 PR CI에는 넣지 않았습니다.
 
-답변 아래 👍/👎 평가는 Upstash Redis에 90일 동안 저장됩니다. 저장되는 질문과 답변은 개인정보 마스킹을 거친 것이고 IP는 남기지 않습니다. `npm run feedback`은 모델별, 프롬프트 버전별 평가를 요약하고 👎 사례를 `eval/results/feedback-candidates.jsonl`로 내보냅니다. 검토해서 `expectedPostIds`를 채운 것만 `eval/questions.jsonl`에 옮깁니다.
+답변 아래 👍/👎 평가는 Upstash Redis에 90일 동안 저장됩니다. 저장되는 질문과 답변은 개인정보 마스킹을 거친 것이고 IP는 남기지 않습니다. `npm run feedback`은 모델별, 프롬프트 버전별 평가를 요약하고 👎 사례를 `eval/results/feedback-candidates.jsonl`로 내보냅니다. 검토해서 `expectedPostIds`를 채운 것만 `eval/questions.jsonl`에 옮깁니다. 평가셋에 이미 옮긴 후보는 다음 실행부터 빠지고, 후보 파일은 실행할 때마다 새로 쓰므로 채운 줄은 바로 옮깁니다.
 
 ## 배포
 

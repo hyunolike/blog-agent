@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryFeedbackStore, FEEDBACK_TTL, handleFeedback, type FeedbackDeps, type ResponseContext } from "@/lib/feedback";
-import { summarize, toCandidate } from "@/eval/feedback";
+import { newCandidates, summarize, toCandidate } from "@/eval/feedback";
 
 const ORIGIN = "https://chat.example.dev";
 const ID = "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f";
@@ -127,5 +127,12 @@ describe("feedback export", () => {
     expect(toCandidate(rec({ history: [] }))).toMatchObject({ type: "single" });
     expect(toCandidate(rec({ history: [], currentPostId: 70 }))).toMatchObject({ type: "current", currentPostId: 70 });
     expect(toCandidate(rec({ history: [] }))).not.toHaveProperty("history");
+  });
+
+  it("leaves out candidates already moved to the eval set", () => {
+    const other = "9a8b7c6d-0000-4000-8000-000000000000";
+    const { fresh, skipped } = newCandidates([rec({}), rec({ responseId: other })], new Set(["fb-3f2b8c1e", "q-01"]));
+    expect(fresh.map((c) => c.id)).toEqual(["fb-9a8b7c6d"]);
+    expect(skipped).toBe(1);
   });
 });
