@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { AI_UNAVAILABLE } from "@/lib/config";
 import { loadSession, saveSession, toWire } from "@/lib/session";
 import type { ChatUIMessage } from "@/lib/types";
-import { MessageView, SourceCards, uniqueByPost } from "./message";
+import { MessageView, SourceCards, uniqueByPost, type RateFn } from "./message";
 
 const STORAGE_KEY = "blog-agent:messages";
+const RATINGS_KEY = "blog-agent:ratings";
 const STORED_MESSAGES = 20;
 const MAX_CHARS = 500;
 const SUGGESTIONS = ["운영 중인 프로젝트는 뭐가 있어?", "장애 대응 경험을 알려줘", "systemd timer는 왜 썼어?"];
@@ -36,10 +37,26 @@ export function Chat({ from }: { from: string | null }) {
     }),
   });
 
+  // 평가를 보낸 응답 ID. 대화와 같이 브라우저 세션에만 둔다
+  const [rated, setRated] = useState<string[]>([]);
+
   useEffect(() => {
     const saved = loadSession<ChatUIMessage[]>(STORAGE_KEY);
     if (saved?.length) setMessages(saved);
+    setRated(loadSession<string[]>(RATINGS_KEY) ?? []);
   }, [setMessages]);
+
+  const rate: RateFn = (responseId, rating, reason) => {
+    const next = [...rated, responseId].slice(-STORED_MESSAGES);
+    setRated(next);
+    saveSession(RATINGS_KEY, next);
+    // 저장에 실패해도 사용자에게는 알리지 않는다. 평가는 답변을 보는 데 필요한 기능이 아니다
+    void fetch("/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ responseId, rating, reason }),
+    }).catch(() => undefined);
+  };
 
   useEffect(() => {
     if (status === "ready" || status === "error") saveSession(STORAGE_KEY, messages.slice(-STORED_MESSAGES));
@@ -90,9 +107,18 @@ export function Chat({ from }: { from: string | null }) {
             </div>
           </div>
         )}
-        {messages.map((m) => (
-          <MessageView key={m.id} message={m} />
-        ))}
+        {messages.map((m, i) => {
+          const responseId = m.metadata?.responseId;
+          // 마지막 답변은 스트리밍이 끝난 뒤에만 평가할 수 있다
+          const done = i < messages.length - 1 || status === "ready";
+          return (
+            <MessageView
+              key={m.id}
+              message={m}
+              feedback={responseId ? { done, rated: rated.includes(responseId), onRate: rate } : undefined}
+            />
+          );
+        })}
         {status === "submitted" && <div className="msg msg-bot typing">글을 찾아보는 중…</div>}
 
         {aiDown && !lastText && last?.role === "assistant" && (

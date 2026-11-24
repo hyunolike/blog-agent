@@ -15,6 +15,7 @@
     "ingest": "tsx --env-file-if-exists=.env.local ingest/run.ts",
     "eval:retrieval": "tsx --env-file-if-exists=.env.local eval/retrieval.ts",
     "eval:answers": "tsx --env-file-if-exists=.env.local eval/answers.ts",
+    "feedback": "tsx --env-file-if-exists=.env.local eval/feedback.ts",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

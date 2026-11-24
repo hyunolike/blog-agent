@@ -2,6 +2,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it, vi } from "vitest";
 import { AI_UNAVAILABLE, handleChat, type ChatDeps } from "@/lib/chat-handler";
+import { createMemoryFeedbackStore } from "@/lib/feedback";
 import { createFallbackModel } from "@/lib/fallback-model";
 import { createSearcher, type RetrievedChunk, type SearchInput } from "@/lib/retrieval";
 import { encodeVector } from "@/lib/vector";
@@ -265,5 +266,62 @@ describe("handleChat", () => {
     await sse(res);
     expect(log).toHaveBeenCalledWith(expect.objectContaining({ event: "chat", outcome: "interrupted" }));
     expect(log).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: "all_models_failed" }));
+  });
+});
+
+describe("handleChat feedback context", () => {
+  it("sends a responseId and stores the masked context once the answer ends", async () => {
+    const feedback = createMemoryFeedbackStore();
+    const body = {
+      messages: [
+        { id: "u0", role: "user", parts: [{ type: "text", text: "이전 질문" }] },
+        { id: "a0", role: "assistant", parts: [{ type: "text", text: "이전 답변" }] },
+        { id: "u1", role: "user", parts: [{ type: "text", text: "제 번호 010-1234-5678, 점검 플래그 어디에 뒀어?" }] },
+      ],
+      from: "https://hyunolike.tistory.com/70",
+    };
+    const chunks = await sse(await handleChat(request(body), deps({ feedback })));
+    const responseId = chunks[0].messageMetadata.responseId as string;
+    expect(responseId).toMatch(/^[0-9a-f-]{36}$/);
+    const ctx = await feedback.getContext(responseId);
+    expect(ctx).toMatchObject({
+      question: "제 번호 [전화번호], 점검 플래그 어디에 뒀어?",
+      history: [
+        { role: "user", text: "이전 질문" },
+        { role: "assistant", text: "이전 답변" },
+      ],
+      answer: "답변[1]",
+      postIds: [70],
+      currentPostId: 70,
+      model: "paid/model",
+    });
+    expect(ctx!.chunkIds.length).toBeGreaterThan(0);
+    expect(ctx!.promptVersion).toMatch(/^[0-9a-f]{8}$/);
+    expect(JSON.stringify(ctx)).not.toContain("5678");
+  });
+
+  it("stores nothing when every model fails", async () => {
+    const feedback = createMemoryFeedbackStore();
+    const save = vi.spyOn(feedback, "saveContext");
+    await sse(
+      await handleChat(
+        request(ask("점검")),
+        deps({ feedback, createModel: (onUsed) => createFallbackModel({ primary: null, fallback: failingModel, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }) }),
+      ),
+    );
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("omits responseId without a feedback store", async () => {
+    const chunks = await sse(await handleChat(request(ask("점검")), deps()));
+    expect(chunks[0].messageMetadata.responseId).toBeUndefined();
+  });
+
+  it("still answers when saving the context fails", async () => {
+    const log = vi.fn();
+    const feedback = { ...createMemoryFeedbackStore(), saveContext: async () => { throw new Error("redis down"); } };
+    const chunks = await sse(await handleChat(request(ask("점검")), deps({ feedback, log })));
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("답변[1]");
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ event: "feedback_context_error" }));
   });
 });

@@ -1,11 +1,13 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { createUIMessageStream, createUIMessageStreamResponse, streamText, toUIMessageStream, type ToolSet } from "ai";
 import { z } from "zod";
 import { AI_UNAVAILABLE, parseBlogPostId } from "./config";
 import type { ModelUsed } from "./fallback-model";
+import type { FeedbackStore } from "./feedback";
 import { checkLimits, type Limiters } from "./limits";
 import { maskPii, type MaskResult } from "./pii";
-import { buildModelMessages, buildSearchQuery, buildSources, SYSTEM_PROMPT, type TextMessage } from "./prompt";
+import { ANSWER_REMINDER, buildModelMessages, buildSearchQuery, buildSources, SYSTEM_PROMPT, type TextMessage } from "./prompt";
 import type { Searcher } from "./retrieval";
 import type { ChatMetadata, ChatUIMessage } from "./types";
 
@@ -16,7 +18,12 @@ export type ChatDeps = {
   limits: Limiters;
   allowedOrigins: string[];
   log(entry: Record<string, unknown>): void;
+  /** 답변 평가를 받을 수 있게 응답 맥락을 잠시 둔다. 없으면 평가 버튼이 나오지 않는다. */
+  feedback?: FeedbackStore;
 };
+
+/** 평가를 프롬프트 변경 전후로 나눠 보려고 지시문 해시를 함께 저장한다 */
+export const PROMPT_VERSION = createHash("sha256").update(SYSTEM_PROMPT).update(ANSWER_REMINDER).digest("hex").slice(0, 8);
 
 export const CHAT_LIMITS = { maxBodyBytes: 16384, maxMessages: 6, maxQuestionChars: 500, maxOutputTokens: 800 };
 export { AI_UNAVAILABLE };
@@ -116,10 +123,11 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
     used = u;
   });
   const postIds = [...new Set(sources.map((s) => s.postId))];
+  const responseId = deps.feedback ? randomUUID() : undefined;
 
   const stream = createUIMessageStream<ChatUIMessage>({
     execute: ({ writer }) => {
-      writer.write({ type: "start", messageMetadata: { sources } satisfies ChatMetadata });
+      writer.write({ type: "start", messageMetadata: { sources, ...(responseId ? { responseId } : {}) } satisfies ChatMetadata });
       const result = streamText({
         model,
         instructions: SYSTEM_PROMPT,
@@ -127,6 +135,25 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
         maxOutputTokens: CHAT_LIMITS.maxOutputTokens,
         maxRetries: 0,
         abortSignal: req.signal,
+        // 스트림은 이 콜백이 끝난 뒤 닫히므로, 화면에 평가 버튼이 나올 때는 맥락이 이미 저장돼 있다
+        onEnd: async ({ text }) => {
+          if (!deps.feedback || !responseId || !text.trim()) return;
+          try {
+            await deps.feedback.saveContext(responseId, {
+              question: safeMessages[safeMessages.length - 1]!.text,
+              history: safeMessages.slice(0, -1),
+              answer: text,
+              chunkIds: results.slice(0, sources.length).map((r) => r.chunk.id),
+              postIds,
+              currentPostId,
+              model: used?.modelId,
+              promptVersion: PROMPT_VERSION,
+              createdAt: new Date().toISOString(),
+            });
+          } catch (err) {
+            deps.log({ event: "feedback_context_error", error: err instanceof Error ? err.message : String(err) });
+          }
+        },
         onError: ({ error }) => {
           // 모든 모델이 실패하면 스트림은 finish 없이 start→error로 끝난다. 글자가 나온 뒤 끊기면 interrupted.
           // 여기서 직접 구조화 로그를 남기고, ai SDK의 기본 console.error(원시 에러) 출력을 대신한다.

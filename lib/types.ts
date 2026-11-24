@@ -43,6 +43,8 @@ export type ChatMetadata = {
   sources?: SourceRef[];
   model?: string;
   tier?: "primary" | "fallback";
+  /** 답변 평가를 보낼 때 쓰는 ID. 평가 저장소가 없으면 오지 않는다. */
+  responseId?: string;
 };
 
 export type ChatUIMessage = UIMessage<ChatMetadata>;
