@@ -19,18 +19,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      # 비밀값이 아직 없으면 실패 대신 건너뛴다(매일 실패 알림이 쌓이지 않게)
+      - id: secrets
+        run: |
+          if [ -z "$URL" ] || [ -z "$TOKEN" ]; then
+            echo "::notice::UPSTASH_REDIS_REST_URL 또는 UPSTASH_REDIS_REST_READONLY_TOKEN이 없어 건너뜁니다."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          TOKEN: ${{ secrets.UPSTASH_REDIS_REST_READONLY_TOKEN }}
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v5
+      - if: steps.secrets.outputs.ready == 'true'
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - if: steps.secrets.outputs.ready == 'true'
+        run: npm ci
       - name: 승인한 검토를 평가셋에 추가
+        if: steps.secrets.outputs.ready == 'true'
         run: npm run feedback
         env:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_READONLY_TOKEN }}
       - id: diff
+        if: steps.secrets.outputs.ready == 'true'
         run: |
           if git diff --quiet -- eval/questions.jsonl; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
