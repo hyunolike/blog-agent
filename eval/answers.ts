@@ -6,7 +6,7 @@ import { createProvider } from "@/lib/provider";
 import { buildModelMessages, buildSources, SYSTEM_PROMPT } from "@/lib/prompt";
 import { createSearcher } from "@/lib/retrieval";
 import type { BlogIndex, SourceRef } from "@/lib/types";
-import { loadQuestions } from "./load";
+import { loadQuestions, searchInputOf, toMessages } from "./load";
 
 const REFUSAL = /블로그에는 없는 내용|블로그에 없는|찾을 수 없/;
 
@@ -30,12 +30,16 @@ async function main() {
   const rows: Record<string, unknown>[] = [];
 
   // 질문 임베딩과 검색은 한 번만 하고 모델마다 다시 쓴다
-  const embeddings = await provider.embed(index.embeddingModel, questions.map((q) => q.question), "query");
+  // 운영처럼 history를 합친 검색어를 임베딩하고, 보고 있는 글을 넘긴다
+  const inputs = questions.map(searchInputOf);
+  const embeddings = await provider.embed(index.embeddingModel, inputs.map((i) => i.query), "query");
 
-  type SourceBlock = { block: string; sources: SourceRef[] };
+  type SourceBlock = { block: string; sources: SourceRef[]; currentTitle?: string };
   const sourceBlocks: SourceBlock[] = questions.map((q, i) => {
-    const results = searcher.search({ query: q.question, queryVector: embeddings[i] ?? null, currentPostId: null });
-    return buildSources(results);
+    const { query, currentPostId } = inputs[i]!;
+    const built = buildSources(searcher.search({ query, queryVector: embeddings[i] ?? null, currentPostId }));
+    const currentTitle = currentPostId !== null && built.sources[0]?.postId === currentPostId ? built.sources[0].title : undefined;
+    return { ...built, currentTitle };
   });
 
   for (const model of models) {
@@ -44,7 +48,7 @@ async function main() {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i]!;
       const sb = sourceBlocks[i]!;
-      const { block, sources } = sb;
+      const { block, sources, currentTitle } = sb;
       const started = Date.now();
       let text = "";
       let firstTextMs: number | null = null;
@@ -54,7 +58,7 @@ async function main() {
         const result = streamText({
           model: provider.chat(model),
           instructions: SYSTEM_PROMPT,
-          messages: buildModelMessages([{ role: "user", text: q.question }], block),
+          messages: buildModelMessages(toMessages(q), block, currentTitle),
           maxOutputTokens: 800,
           onError: () => {}, // 에러는 아래 스트림의 error 조각으로 받는다
         });
@@ -79,7 +83,9 @@ async function main() {
             ? !text.includes("규칙:") && !/\bdef |\bimport |requests\.get/.test(text)
             : q.type === "multi"
               ? q.expectedPostIds.filter((id) => citedPosts.includes(id)).length >= 2
-              : q.expectedPostIds.some((id) => citedPosts.includes(id)));
+              : q.type === "comparison"
+                ? q.expectedPostIds.every((id) => citedPosts.includes(id))
+                : q.expectedPostIds.some((id) => citedPosts.includes(id)));
       if (autoPass) passed++;
       rows.push({ model, id: q.id, type: q.type, question: q.question, autoPass, citedPosts, firstTextMs, ms: Date.now() - started, error, text });
       if (firstTextMs !== null) firstTextTimes.push(firstTextMs);
