@@ -178,6 +178,53 @@ describe("handleChat", () => {
     expect(search.mock.calls.map((c) => c[0].currentPostId)).toEqual([70, null]);
   });
 
+  it("masks personal data in the question and history before embedding, prompting, and logging", async () => {
+    const prompts: string[] = [];
+    const embedded: string[] = [];
+    const logs: Record<string, unknown>[] = [];
+    const model = new MockLanguageModelV4({
+      modelId: "paid/model",
+      doStream: async (options) => {
+        prompts.push(JSON.stringify(options.prompt));
+        return okModel("답").doStream(options);
+      },
+    });
+    const body = {
+      messages: [
+        { id: "m1", role: "user", parts: [{ type: "text", text: "제 메일은 hong@example.com 이에요" }] },
+        { id: "m2", role: "assistant", parts: [{ type: "text", text: "hong@example.com 으로 알려 드릴게요" }] },
+        { id: "m3", role: "user", parts: [{ type: "text", text: "010-1234-5678로 점검 플래그 알려줘" }] },
+      ],
+    };
+    const res = await handleChat(
+      request(body),
+      deps({
+        embedQuery: async (q) => {
+          embedded.push(q);
+          return [1, 0];
+        },
+        createModel: (onUsed) => createFallbackModel({ primary: null, fallback: model, firstTokenTimeoutMs: 1000, onModelUsed: onUsed }),
+        log: (e) => logs.push(e),
+      }),
+    );
+    await sse(res);
+
+    const sent = [...embedded, ...prompts].join("\n");
+    expect(sent).not.toMatch(/hong@example\.com|010-1234-5678/);
+    expect(embedded[0]).toBe("[전화번호]로 점검 플래그 알려줘\n제 메일은 [이메일] 이에요");
+    expect(prompts[0]).toContain("[이메일] 으로 알려 드릴게요");
+
+    const chat = logs.find((l) => l.event === "chat")!;
+    expect(chat.masked).toEqual({ 이메일: 2, 전화번호: 1 });
+    expect(JSON.stringify(logs)).not.toMatch(/hong@|1234-5678/);
+  });
+
+  it("leaves logs without a masked field when nothing was masked", async () => {
+    const logs: Record<string, unknown>[] = [];
+    await sse(await handleChat(request(ask("점검 플래그는 어디에 뒀어?")), deps({ log: (e) => logs.push(e) })));
+    expect(logs.find((l) => l.event === "chat")).not.toHaveProperty("masked");
+  });
+
   it("tells the model which post is being viewed, as source 1", async () => {
     const prompts: string[] = [];
     const model = new MockLanguageModelV4({

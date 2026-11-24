@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AI_UNAVAILABLE, parseBlogPostId } from "./config";
 import type { ModelUsed } from "./fallback-model";
 import { checkLimits, type Limiters } from "./limits";
+import { maskPii, type MaskResult } from "./pii";
 import { buildModelMessages, buildSearchQuery, buildSources, SYSTEM_PROMPT, type TextMessage } from "./prompt";
 import type { Searcher } from "./retrieval";
 import type { ChatMetadata, ChatUIMessage } from "./types";
@@ -84,7 +85,17 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
     return json(503, { error: "index_unavailable", message: "검색 인덱스를 준비 중이에요. 잠시 후 다시 시도해 주세요." });
   }
 
-  const query = buildSearchQuery(messages);
+  // 개인정보는 외부 모델(임베딩, 답변)에 보내기 전에 가린다. 이전 대화도 함께 보내므로 모두 가린다
+  const masked: MaskResult["counts"] = {};
+  const safeMessages: TextMessage[] = messages.map((m) => {
+    const { text, counts } = maskPii(m.text);
+    for (const [kind, n] of Object.entries(counts) as [keyof MaskResult["counts"], number][]) masked[kind] = (masked[kind] ?? 0) + n;
+    return { role: m.role, text };
+  });
+  // 로그에는 가린 값이 아니라 종류별 개수만 남긴다
+  const maskedLog = Object.keys(masked).length > 0 ? { masked } : {};
+
+  const query = buildSearchQuery(safeMessages);
   let queryVector: number[] | null = null;
   let embedFailed = false;
   try {
@@ -112,7 +123,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
       const result = streamText({
         model,
         instructions: SYSTEM_PROMPT,
-        messages: buildModelMessages(messages, block, currentTitle),
+        messages: buildModelMessages(safeMessages, block, currentTitle),
         maxOutputTokens: CHAT_LIMITS.maxOutputTokens,
         maxRetries: 0,
         abortSignal: req.signal,
@@ -127,6 +138,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
             postIds,
             questionChars,
             embedFailed,
+            ...maskedLog,
           });
         },
       });
@@ -150,6 +162,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
               postIds,
               questionChars,
               embedFailed,
+              ...maskedLog,
             });
             return { model: used?.modelId, tier: used?.tier } satisfies ChatMetadata;
           },
@@ -157,7 +170,7 @@ export async function handleChat(req: Request, deps: ChatDeps): Promise<Response
       );
     },
     onError: (err) => {
-      deps.log({ event: "chat_error", error: err instanceof Error ? err.message : String(err), questionChars, embedFailed });
+      deps.log({ event: "chat_error", error: err instanceof Error ? err.message : String(err), questionChars, embedFailed, ...maskedLog });
       return AI_UNAVAILABLE;
     },
   });
