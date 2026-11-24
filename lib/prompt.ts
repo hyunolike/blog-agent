@@ -61,6 +61,23 @@ const LISTING_GUIDE =
  * 질문 바로 앞에 붙이는 짧은 상기. 작은 모델은 시스템 지시문의 인용 규칙을 자주 빠뜨리고,
  * "~해 본 적 있어?"를 자기 자신에 대한 질문으로 받아 "저는 언어 모델입니다"라고 답하곤 했다.
  */
+/**
+ * "Rust로 개발해 본 적 있어?"처럼 경험을 묻거나 "너"라고 부르는 질문에 모델이 "저는 NVIDIA 언어 모델"이라고
+ * 자기소개하곤 했다. 이런 질문만 따옴표로 감싸 블로그 주인에 대한 질문임을 밝히고 답의 첫머리를 정한다
+ * (둘 중 하나만으로는 부족했다). 모든 질문에 붙이면 비교형 답에서 인용 형식이 무너져 이런 질문에만 쓴다.
+ */
+const ASKS_EXPERIENCE = /본\s?(?:적|경험)|해\s?봤|써\s?봤|만들어\s?봤|경험\s?(?:있|해)|(?:^|\s)(?:너|넌|네가|니가|당신)(?=\s|는|은|가|도|$)/;
+export const QUESTION_LABEL = "블로그 주인에 대해 위 출처로 답할 질문: ";
+export const ANSWER_OPENING = '답은 "블로그 주인은" 또는 "블로그에는"으로 시작한다.';
+
+export function asksExperience(question: string): boolean {
+  return ASKS_EXPERIENCE.test(question);
+}
+
+function questionLine(question: string): string {
+  return asksExperience(question) ? `${QUESTION_LABEL}"${question}"\n${ANSWER_OPENING}` : `질문: ${question}`;
+}
+
 export const ANSWER_REMINDER = "아래 질문은 블로그 주인에 대해 묻는 말이다. 근거가 된 문장마다 끝에 [번호]를 붙여 답한다.";
 
 /** 이전 답변의 [1], [2, 3] 같은 출처 번호. 이번 턴의 출처 번호와 섞이지 않게 지운다. */
@@ -85,6 +102,6 @@ export function buildModelMessages(messages: TextMessage[], sourceBlock: string,
   const listing = isListingQuery(last.text) ? `\n\n${LISTING_GUIDE}` : "";
   return [
     ...history.map((m) => ({ role: m.role, content: m.text })),
-    { role: "user" as const, content: `${viewing}${sourceBlock}${listing}\n\n${ANSWER_REMINDER}\n\n질문: ${last.text}` },
+    { role: "user" as const, content: `${viewing}${sourceBlock}${listing}\n\n${ANSWER_REMINDER}\n\n${questionLine(last.text)}` },
   ];
 }

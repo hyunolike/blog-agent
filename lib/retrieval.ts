@@ -12,6 +12,14 @@ export function isListingQuery(query: string): boolean {
   return LISTING.test(query.split("\n")[0] ?? "");
 }
 
+// "그때", "그 작업", "거기", "아까"처럼 앞 질문을 가리키는 말. 이런 질문은 지금 질문만으로는 주제를 알 수 없다
+const REFERS_BACK = /(?:^|[^가-힣])(?:그|이|저)\s?(?:때|거|것|걸|게|건|곳|작업|기능|문제|장애|글|방법|부분|코드|서비스|프로젝트|얘기|내용)|거기|아까|방금|앞에서|위에서/;
+
+/** 이어지는 질문이 앞 질문을 가리키지 않고 스스로 주제를 담고 있는지 */
+export function isStandaloneFollowup(question: string): boolean {
+  return !REFERS_BACK.test(question);
+}
+
 export type RetrievedChunk = { chunk: Chunk; post: Post; score: number };
 export type SearchInput = { query: string; queryVector: ArrayLike<number> | null; currentPostId: number | null };
 export type Searcher = { search(input: SearchInput): RetrievedChunk[] };
@@ -87,7 +95,13 @@ export function createSearcher(index: BlogIndex): Searcher {
   return {
     search({ query, queryVector, currentPostId }) {
       const fused = new Map<number, number>();
-      for (const ranking of [bm25Ranking(query), vectorRanking(queryVector)]) {
+      // 이어지는 질문이면 검색어가 "지금 질문\n앞 질문"이다. 주제를 바꾼 질문("그럼 Flyway는 왜 도입했어?")이면
+      // 지금 질문만으로 한 키워드 순위를 하나 더 합쳐, 앞 질문의 글이 앞 출처를 차지하지 않게 한다.
+      // "그때 데이터는 어떻게 옮겼어?"처럼 앞 질문을 가리키면 합친 검색어만 쓴다
+      const [asked, ...previous] = query.split("\n");
+      const rankings = [bm25Ranking(query), vectorRanking(queryVector)];
+      if (previous.length > 0 && isStandaloneFollowup(asked!)) rankings.push(bm25Ranking(asked!));
+      for (const ranking of rankings) {
         ranking.forEach((chunkIdx, r) => fused.set(chunkIdx, (fused.get(chunkIdx) ?? 0) + 1 / (SEARCH.rrfK + r + 1)));
       }
 

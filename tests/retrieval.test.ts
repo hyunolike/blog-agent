@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSearcher, isListingQuery, SEARCH } from "@/lib/retrieval";
+import { createSearcher, isStandaloneFollowup, isListingQuery, SEARCH } from "@/lib/retrieval";
 import { tokenize } from "@/lib/tokenize";
 import { encodeVector } from "@/lib/vector";
 import type { BlogIndex, Chunk, Post } from "@/lib/types";
@@ -71,6 +71,23 @@ describe("createSearcher", () => {
   it("finds semantically close chunks by vector", () => {
     const results = searcher.search({ query: "관계없는말", queryVector: [1, 0.05], currentPostId: null });
     expect(results[0]!.chunk.postId).toBe(2);
+  });
+
+  it("ranks the current question's topic first when a follow-up changes the subject", () => {
+    // 검색어는 "지금 질문\n앞 질문"이고, 합친 문장의 임베딩은 앞 질문 쪽(redis)으로 기운다
+    const results = searcher.search({ query: "그럼 점검 페이지는 왜 만들었어?\nredis 분산락은 어떻게 구현했어?", queryVector: [0.7, 0.6], currentPostId: null });
+    expect(results[0]!.chunk.postId).toBe(2);
+    // 앞 질문의 글도 뒤쪽 출처로는 남는다(이어지는 질문이 앞 주제를 가리킬 수 있다)
+    expect(results.some((r) => r.post.id === 3)).toBe(true);
+  });
+
+  it("tells follow-ups that refer back from ones that change the subject", () => {
+    for (const q of ["그때 서비스를 멈추지 않고 데이터는 어떻게 옮겼어?", "그 작업은 파일을 어디로 보냈어?", "그거 더 자세히 알려줘", "아까 말한 방법은?", "거기서 뭐가 문제였어?"]) {
+      expect(isStandaloneFollowup(q), q).toBe(false);
+    }
+    for (const q of ["그럼 Flyway는 왜 도입했어?", "레거시 SOAP 연동은 Spring Boot로 어떻게 옮겼어?", "그래서 Redis는 왜 썼어?", "이번엔 Kafka 얘기 해줘"]) {
+      expect(isStandaloneFollowup(q), q).toBe(true);
+    }
   });
 
   it("caps chunks per post and returns at most finalCount", () => {
