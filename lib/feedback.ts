@@ -20,24 +20,43 @@ export type FeedbackReason = (typeof FEEDBACK_REASONS)[number];
 export type Rating = "up" | "down";
 export type FeedbackRecord = ResponseContext & { responseId: string; rating: Rating; reason?: FeedbackReason; ratedAt: string };
 
+/** 관리자 검토 결과. 평가 기록(90일)이 먼저 만료돼도 평가셋으로 내보낼 수 있게 질문을 스냅샷으로 둔다 */
+export type Review = {
+  action: "approve" | "dismiss";
+  expectedPostIds: number[];
+  reviewedBy: number;
+  reviewedAt: string;
+  question: string;
+  history: string[];
+  currentPostId: number | null;
+};
+
 export type FeedbackStore = {
   saveContext(responseId: string, ctx: ResponseContext): Promise<void>;
   getContext(responseId: string): Promise<ResponseContext | null>;
   saveFeedback(record: FeedbackRecord): Promise<void>;
+  getFeedback(responseId: string): Promise<FeedbackRecord | null>;
   listFeedback(): Promise<FeedbackRecord[]>;
+  getReview(responseId: string): Promise<Review | null>;
+  saveReview(responseId: string, review: Review): Promise<void>;
+  listReviews(): Promise<(Review & { responseId: string })[]>;
 };
 
-export const FEEDBACK_TTL = { contextSec: 86_400, feedbackSec: 90 * 86_400 };
+export const FEEDBACK_TTL = { contextSec: 86_400, feedbackSec: 90 * 86_400, reviewSec: 180 * 86_400 };
 export const FEEDBACK_LIMIT = { ipPerDay: 100 };
 
 const ctxKey = (id: string) => `fb:ctx:${id}`;
 const recordKey = (id: string) => `fb:rec:${id}`;
 const INDEX_KEY = "fb:index";
+const reviewKey = (id: string) => `fb:rev:${id}`;
+const REVIEW_INDEX_KEY = "fb:rev:index";
 
 /** Upstash 설정이 없는 로컬 개발과 테스트용. 서버리스 인스턴스 사이에서는 공유되지 않는다. */
 export function createMemoryFeedbackStore(now: () => number = Date.now): FeedbackStore {
   const contexts = new Map<string, { ctx: ResponseContext; expiresAt: number }>();
-  const records = new Map<string, FeedbackRecord>();
+  const records = new Map<string, { record: FeedbackRecord; expiresAt: number }>();
+  const reviews = new Map<string, { review: Review; expiresAt: number }>();
+  const alive = <T extends { expiresAt: number }>(hit: T | undefined) => (hit && hit.expiresAt > now() ? hit : undefined);
   return {
     async saveContext(id, ctx) {
       contexts.set(id, { ctx, expiresAt: now() + FEEDBACK_TTL.contextSec * 1000 });
@@ -47,10 +66,22 @@ export function createMemoryFeedbackStore(now: () => number = Date.now): Feedbac
       return hit && hit.expiresAt > now() ? hit.ctx : null;
     },
     async saveFeedback(record) {
-      records.set(record.responseId, record);
+      records.set(record.responseId, { record, expiresAt: now() + FEEDBACK_TTL.feedbackSec * 1000 });
+    },
+    async getFeedback(id) {
+      return alive(records.get(id))?.record ?? null;
     },
     async listFeedback() {
-      return [...records.values()];
+      return [...records.values()].filter((h) => alive(h)).map((h) => h.record);
+    },
+    async getReview(id) {
+      return alive(reviews.get(id))?.review ?? null;
+    },
+    async saveReview(id, review) {
+      reviews.set(id, { review, expiresAt: now() + FEEDBACK_TTL.reviewSec * 1000 });
+    },
+    async listReviews() {
+      return [...reviews.entries()].filter(([, h]) => alive(h)).map(([responseId, h]) => ({ ...h.review, responseId }));
     },
   };
 }
@@ -67,16 +98,38 @@ export function createRedisFeedbackStore(redis: Redis): FeedbackStore {
       await redis.set(recordKey(record.responseId), record, { ex: FEEDBACK_TTL.feedbackSec });
       await redis.zadd(INDEX_KEY, { score: Date.parse(record.ratedAt), member: record.responseId });
     },
+    async getFeedback(id) {
+      return (await redis.get<FeedbackRecord>(recordKey(id))) ?? null;
+    },
     async listFeedback() {
-      const ids = await redis.zrange<string[]>(INDEX_KEY, 0, -1);
+      return listIndexed<FeedbackRecord>(redis, INDEX_KEY, recordKey);
+    },
+    async getReview(id) {
+      return (await redis.get<Review>(reviewKey(id))) ?? null;
+    },
+    async saveReview(id, review) {
+      await redis.set(reviewKey(id), review, { ex: FEEDBACK_TTL.reviewSec });
+      await redis.zadd(REVIEW_INDEX_KEY, { score: Date.parse(review.reviewedAt), member: id });
+    },
+    async listReviews() {
+      const ids = await redis.zrange<string[]>(REVIEW_INDEX_KEY, 0, -1);
       if (ids.length === 0) return [];
-      const recs = await redis.mget<(FeedbackRecord | null)[]>(...ids.map(recordKey));
-      // 90일이 지나 본문이 만료된 ID는 목록에서도 지운다
-      const expired = ids.filter((_, i) => !recs[i]);
-      if (expired.length > 0) await redis.zrem(INDEX_KEY, ...expired);
-      return recs.filter((r): r is FeedbackRecord => r !== null);
+      const revs = await redis.mget<(Review | null)[]>(...ids.map(reviewKey));
+      const expired = ids.filter((_, i) => !revs[i]);
+      if (expired.length > 0) await redis.zrem(REVIEW_INDEX_KEY, ...expired);
+      return ids.flatMap((responseId, i) => (revs[i] ? [{ ...revs[i]!, responseId }] : []));
     },
   };
+}
+
+/** 정렬 집합의 ID로 본문을 읽는다. 본문이 만료된 ID는 목록에서도 지운다 */
+async function listIndexed<T>(redis: Redis, indexKey: string, keyOf: (id: string) => string): Promise<T[]> {
+  const ids = await redis.zrange<string[]>(indexKey, 0, -1);
+  if (ids.length === 0) return [];
+  const values = await redis.mget<(T | null)[]>(...ids.map(keyOf));
+  const expired = ids.filter((_, i) => !values[i]);
+  if (expired.length > 0) await redis.zrem(indexKey, ...expired);
+  return values.filter((v): v is T => v !== null);
 }
 
 export type FeedbackDeps = {
