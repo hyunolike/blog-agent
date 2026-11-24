@@ -198,6 +198,14 @@ listReviews(): Promise<(Review & { responseId: string })[]>;
 - 같은 `fb-` ID가 다른 응답에서 나오면(UUID 앞 8자리 충돌) 건너뛰고 경고를 출력한다.
 - 승인하거나 제외한 건은 후보 파일에서 뺀다. 추가한 건수와 건너뛴 건수를 출력한다. 커밋은 사람이 한다.
 
+### A6-1 내보내기 자동화 (2026-11-24 추가)
+
+`.github/workflows/feedback.yml`이 매일 04:30 KST(ingest 30분 뒤)와 수동 실행 때 `npm run feedback`을 돌린다. `eval/questions.jsonl`이 바뀌었으면 검색 평가(`eval:retrieval`, 실패해도 경고만)를 돌린 뒤 develop에 직접 커밋한다. `/admin`의 승인이 이미 사람의 검토이므로 PR을 거치지 않는다. 커밋하면 재배포되어 검토 화면의 "이미 평가셋에 있음" 목록도 갱신된다.
+
+- 비밀값: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_READONLY_TOKEN`(Upstash 읽기 전용 토큰). 내보내기는 Redis를 읽기만 한다. 쓰기 토큰은 Actions에 두지 않는다.
+- 로그에는 건수와 `fb-` ID 경고만 나온다. 질문과 답변 본문은 출력하지 않는다. 후보 파일(`eval/results/`)은 러너에만 남고 커밋하지 않는다.
+- ingest가 같은 시각대에 커밋했을 수 있어 push 전에 `git pull --rebase`를 한다.
+
 ### A7 기록
 
 로그는 `event: "admin_login"`(결과 ok/denied/error, GitHub `id`)과 `event: "admin_review"`(`id`, `responseId`, `action`) 두 가지를 남긴다. 거절된 계정의 로그인 이름, 질문과 답변 본문은 남기지 않는다.
