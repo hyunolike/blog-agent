@@ -50,3 +50,4 @@
 {"id":"q50","type":"current","currentPostId":70,"question":"이 글에서 관리자 스위치를 따로 둔 이유는?","expectedPostIds":[70]}
 {"id":"q51","type":"current","currentPostId":65,"question":"여기서 재부팅 뒤에 문제가 생긴다는 건 어떻게 알아냈어?","expectedPostIds":[65]}
 {"id":"q52","type":"current","currentPostId":70,"question":"Testcontainers로 통합 테스트는 어떻게 했어?","expectedPostIds":[16]}
+{"id":"fb-2983cce7","type":"followup","question":"서버 관련 게시글 알려줘","history":["블로그 조회수 1위 알려줘","AI 관련 게시글 알려줘"],"expectedPostIds":[81,19]}
