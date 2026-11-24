@@ -115,9 +115,9 @@ export async function handleReviewsPost(req: Request, deps: ReviewDeps): Promise
     const record = await deps.store.getFeedback(body.responseId);
     if (!record || record.rating !== "down") return json(404, { error: "not_found" });
     // 검토는 한 번으로 끝난다. 내보낸 평가셋과 Redis가 서로 달라지지 않게 한다
-    if (await deps.store.getReview(body.responseId)) return json(409, { error: "conflict" });
     const reviewedAt = new Date(deps.now?.() ?? Date.now()).toISOString();
-    await deps.store.saveReview(body.responseId, { action: body.action, expectedPostIds, reviewedBy: session.sub, reviewedAt, ...snapshot(record) });
+    const saved = await deps.store.saveReview(body.responseId, { action: body.action, expectedPostIds, reviewedBy: session.sub, reviewedAt, ...snapshot(record) });
+    if (!saved) return json(409, { error: "conflict" });
     deps.log({ event: "admin_review", id: session.sub, responseId: body.responseId, action: body.action });
     return json(200, { ok: true });
   } catch (err) {

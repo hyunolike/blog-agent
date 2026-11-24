@@ -38,7 +38,8 @@ export type FeedbackStore = {
   getFeedback(responseId: string): Promise<FeedbackRecord | null>;
   listFeedback(): Promise<FeedbackRecord[]>;
   getReview(responseId: string): Promise<Review | null>;
-  saveReview(responseId: string, review: Review): Promise<void>;
+  /** 이미 검토가 있으면 저장하지 않고 false. 동시에 두 요청이 와도 하나만 저장된다 */
+  saveReview(responseId: string, review: Review): Promise<boolean>;
   listReviews(): Promise<(Review & { responseId: string })[]>;
 };
 
@@ -78,7 +79,9 @@ export function createMemoryFeedbackStore(now: () => number = Date.now): Feedbac
       return alive(reviews.get(id))?.review ?? null;
     },
     async saveReview(id, review) {
+      if (alive(reviews.get(id))) return false;
       reviews.set(id, { review, expiresAt: now() + FEEDBACK_TTL.reviewSec * 1000 });
+      return true;
     },
     async listReviews() {
       return [...reviews.entries()].filter(([, h]) => alive(h)).map(([responseId, h]) => ({ ...h.review, responseId }));
@@ -108,8 +111,17 @@ export function createRedisFeedbackStore(redis: Redis): FeedbackStore {
       return (await redis.get<Review>(reviewKey(id))) ?? null;
     },
     async saveReview(id, review) {
-      await redis.set(reviewKey(id), review, { ex: FEEDBACK_TTL.reviewSec });
-      await redis.zadd(REVIEW_INDEX_KEY, { score: Date.parse(review.reviewedAt), member: id });
+      // NX로 먼저 자리를 잡아 동시 승인 중 하나만 통과시킨다
+      const created = await redis.set(reviewKey(id), review, { ex: FEEDBACK_TTL.reviewSec, nx: true });
+      if (created === null) return false;
+      try {
+        await redis.zadd(REVIEW_INDEX_KEY, { score: Date.parse(review.reviewedAt), member: id });
+      } catch (err) {
+        // 목록에 없는 검토는 내보내기에서 빠지므로, 본문도 되돌려 다시 검토할 수 있게 한다
+        await redis.del(reviewKey(id)).catch(() => undefined);
+        throw err;
+      }
+      return true;
     },
     async listReviews() {
       const ids = await redis.zrange<string[]>(REVIEW_INDEX_KEY, 0, -1);

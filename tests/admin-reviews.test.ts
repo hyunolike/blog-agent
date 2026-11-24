@@ -132,6 +132,16 @@ describe("POST /api/admin/reviews", () => {
     expect((await handleReviewsPost(post({ responseId: A, action: "approve", expectedPostIds: [70] }), deps)).status).toBe(409);
   });
 
+  it("lets only one of two concurrent reviews win", async () => {
+    const { deps, store } = await setup();
+    const results = await Promise.all([
+      handleReviewsPost(post({ responseId: A, action: "approve", expectedPostIds: [70] }), deps),
+      handleReviewsPost(post({ responseId: A, action: "dismiss" }), deps),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await store.listReviews()).toHaveLength(1);
+  });
+
   it("returns 503 when the index or the store is unavailable", async () => {
     const { deps, store } = await setup();
     expect((await handleReviewsPost(post({ responseId: A, action: "approve", expectedPostIds: [70] }), { ...deps, posts: () => null })).status).toBe(503);

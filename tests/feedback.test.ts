@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createMemoryFeedbackStore, FEEDBACK_TTL, handleFeedback, type FeedbackDeps, type ResponseContext } from "@/lib/feedback";
+import { createMemoryFeedbackStore, createRedisFeedbackStore, FEEDBACK_TTL, handleFeedback, type FeedbackDeps, type ResponseContext } from "@/lib/feedback";
 import { newCandidates, planExport, summarize, toCandidate } from "@/eval/feedback";
 
 const ORIGIN = "https://chat.example.dev";
@@ -175,5 +175,24 @@ describe("approved review export", () => {
     const { added, warnings } = planExport([review(A), review(twin, { reviewedAt: "2026-11-25T00:00:00.000Z" }), review(B, { expectedPostIds: [999] })], new Set(), new Set([70]));
     expect(added.map((q) => q.id)).toEqual(["fb-3f2b8c1e"]);
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe("redis review store", () => {
+  const review = { action: "dismiss" as const, expectedPostIds: [], reviewedBy: 7, reviewedAt: "2026-11-24T12:00:00.000Z", question: "q", history: [], currentPostId: null };
+  const fakeRedis = (over: Record<string, unknown>) =>
+    ({ set: vi.fn(async () => "OK"), zadd: vi.fn(async () => 1), del: vi.fn(async () => 1), ...over }) as unknown as Parameters<typeof createRedisFeedbackStore>[0];
+
+  it("writes with NX and reports an existing review", async () => {
+    const redis = fakeRedis({ set: vi.fn(async () => null) });
+    expect(await createRedisFeedbackStore(redis).saveReview(ID, review)).toBe(false);
+    expect((redis as unknown as { set: ReturnType<typeof vi.fn> }).set).toHaveBeenCalledWith(`fb:rev:${ID}`, review, { ex: FEEDBACK_TTL.reviewSec, nx: true });
+    expect((redis as unknown as { zadd: ReturnType<typeof vi.fn> }).zadd).not.toHaveBeenCalled();
+  });
+
+  it("rolls the review back when the index write fails", async () => {
+    const redis = fakeRedis({ zadd: vi.fn(async () => { throw new Error("down"); }) });
+    await expect(createRedisFeedbackStore(redis).saveReview(ID, review)).rejects.toThrow("down");
+    expect((redis as unknown as { del: ReturnType<typeof vi.fn> }).del).toHaveBeenCalledWith(`fb:rev:${ID}`);
   });
 });
