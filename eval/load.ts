@@ -43,3 +43,11 @@ export function reciprocalRank(q: EvalQuestion, retrievedPostIds: number[]): num
   const first = retrievedPostIds.findIndex((id) => q.expectedPostIds.includes(id));
   return first >= 0 ? 1 / (first + 1) : 0;
 }
+
+/** 답이 없다고 밝힌 답변인지. 표현이 모델마다, 실행마다 달라 여러 형태를 받는다. 모델이 자기소개로 빠진 답은 거절로 치지 않는다. */
+const REFUSAL = /없는 내용|(내용|정보|글|언급)[이가은는]?\s?(없|나와 있지 않)|언급(된 바가|이)?\s?없|언급되지 않|(찾을|알|확인할) 수 없/;
+const SELF_INTRO = /언어 모델|NVIDIA/;
+
+export function isRefusal(text: string): boolean {
+  return REFUSAL.test(text) && !SELF_INTRO.test(text);
+}

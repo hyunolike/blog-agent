@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { loadQuestions, reciprocalRank, retrievalHit, searchInputOf, type EvalQuestion } from "@/eval/load";
+import { isRefusal, loadQuestions, reciprocalRank, retrievalHit, searchInputOf, type EvalQuestion } from "@/eval/load";
 import type { BlogIndex } from "@/lib/types";
 
 const q = (over: Partial<EvalQuestion>): EvalQuestion => ({ id: "a", type: "single", question: "", expectedPostIds: [], ...over });
@@ -77,5 +77,23 @@ describe("searchInputOf", () => {
 
   it("passes the viewed post", () => {
     expect(searchInputOf(q({ type: "current", currentPostId: 70, question: "왜?" }))).toEqual({ query: "왜?", currentPostId: 70 });
+  });
+});
+
+describe("isRefusal", () => {
+  it("accepts the ways models say the blog has no answer", () => {
+    for (const t of [
+      "블로그에는 없는 내용이에요.",
+      "블로그에는 그런 내용이 없습니다.",
+      "블로그 주인 연봉은 언급된 바가 없습니다. [1]",
+      "결혼 여부는 블로그에 언급되지 않았습니다.",
+      "블로그 주인에 대한 정보는 확인할 수 없습니다.",
+      "음식에 대한 명시적인 언급이 없다.",
+    ]) expect(isRefusal(t), t).toBe(true);
+  });
+
+  it("rejects answers and self-introductions", () => {
+    expect(isRefusal("Redis 분산락은 Redisson으로 적용했습니다. [1]")).toBe(false);
+    expect(isRefusal("아니요, 저는 NVIDIA의 연구원들에 의해 훈련된 언어 모델입니다. 그런 정보는 알 수 없습니다.")).toBe(false);
   });
 });
