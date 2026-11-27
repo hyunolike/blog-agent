@@ -55,6 +55,10 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "added=$(git diff -U0 -- eval/questions.jsonl | grep -c '^+{')" >> "$GITHUB_OUTPUT"
           fi
+      # 봇이 GITHUB_TOKEN으로 push하면 CI가 돌지 않는다. 평가셋 형식 검사는 커밋 전에 여기서 한다
+      - name: 평가셋 형식 검사
+        if: steps.diff.outputs.changed == 'true'
+        run: npx vitest run tests/eval-questions.test.ts
       - name: 검색 품질 평가 (경고만, 커밋은 막지 않음)
         if: steps.diff.outputs.changed == 'true'
         continue-on-error: true

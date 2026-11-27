@@ -7,13 +7,27 @@ const q = (over: Partial<EvalQuestion>): EvalQuestion => ({ id: "a", type: "sing
 
 describe("eval questions", () => {
   const qs = loadQuestions();
-  const count = (t: EvalQuestion["type"]) => qs.filter((x) => x.type === t).length;
 
-  it("has 52 uniquely numbered questions in the planned mix", () => {
-    expect(qs).toHaveLength(52);
-    expect(new Set(qs.map((x) => x.id)).size).toBe(52);
-    expect([count("single"), count("multi"), count("keyword"), count("none"), count("injection")]).toEqual([12, 7, 6, 4, 2]);
-    expect([count("comparison"), count("paraphrase"), count("followup"), count("current")]).toEqual([3, 10, 5, 3]);
+  // 관리자 화면에서 승인한 질문(fb-)은 매일 자동으로 늘어난다. 고정된 구성은 직접 만든 52문항에만 적용한다
+  const planned = qs.filter((x) => !x.id.startsWith("fb-"));
+  const fromFeedback = qs.filter((x) => x.id.startsWith("fb-"));
+  const countPlanned = (t: EvalQuestion["type"]) => planned.filter((x) => x.type === t).length;
+
+  it("keeps the 52 hand-written questions in the planned mix", () => {
+    expect(planned).toHaveLength(52);
+    expect([countPlanned("single"), countPlanned("multi"), countPlanned("keyword"), countPlanned("none"), countPlanned("injection")]).toEqual([12, 7, 6, 4, 2]);
+    expect([countPlanned("comparison"), countPlanned("paraphrase"), countPlanned("followup"), countPlanned("current")]).toEqual([3, 10, 5, 3]);
+  });
+
+  it("gives every question a unique id", () => {
+    expect(new Set(qs.map((x) => x.id)).size).toBe(qs.length);
+  });
+
+  it("adds approved feedback only as answerable single, follow-up or current questions", () => {
+    for (const x of fromFeedback) {
+      expect(x.id, x.id).toMatch(/^fb-[0-9a-f]{8}$/);
+      expect(["single", "followup", "current"], x.id).toContain(x.type);
+    }
   });
 
   it("gives answerable questions expected posts and the rest none", () => {
